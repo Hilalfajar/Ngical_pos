@@ -1,0 +1,43 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+build/
+
+# Android
+.gradle/
+android/.gradle/
+android/local.properties
+
+# IDE
+.idea/
+.vscode/
+
+# Windows generated files
+windows/flutter/ephemeral/
+windows/runner/GeneratedPluginRegistrant.cpp
+windows/runner/GeneratedPluginRegistrant.h
+
+# macOS / iOS generated files
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Installer hasil build
+installer_output/
+
+# Private key / secret
+ngical_private_key.txt
+
+# Flutter generated
+.flutter-plugins
+.flutter-plugins-dependencies
