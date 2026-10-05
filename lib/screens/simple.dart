@@ -14,58 +14,6 @@ import '../utils/toast.dart';
 import 'printer.dart';
 import 'staff.dart';
 
-//  Generic placeholder page
-
-class SimplePage extends StatelessWidget {
-  final String title;
-  final String msg;
-  const SimplePage({super.key, required this.title, required this.msg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            PageHeader(title: title),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: C.brandLight,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Icon(Icons.construction_rounded,
-                          size: 40, color: C.brand),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      msg,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: C.muted,
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 //  About
 
 class AboutPage extends StatelessWidget {

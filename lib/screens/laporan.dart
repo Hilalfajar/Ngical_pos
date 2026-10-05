@@ -1548,12 +1548,12 @@ class _LaporanPageState extends State<LaporanPage> {
                                 style: FilledButton.styleFrom(
                                   backgroundColor: C.brand,
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 4),
-                                  minimumSize: Size.zero,
+                                      horizontal: 12, vertical: 8),
+                                  minimumSize: const Size(0, 36),
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                   textStyle: const TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w700),
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
@@ -1566,15 +1566,15 @@ class _LaporanPageState extends State<LaporanPage> {
                               OutlinedButton(
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: C.danger,
-                                  side:
-                                      const BorderSide(color: C.danger),
+                                  side: const BorderSide(
+                                      color: C.danger, width: 1.5),
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  minimumSize: Size.zero,
+                                      horizontal: 10, vertical: 8),
+                                  minimumSize: const Size(0, 36),
                                   tapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
                                   textStyle: const TextStyle(
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w700),
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
@@ -1882,13 +1882,16 @@ class _LaporanPageState extends State<LaporanPage> {
                                     style: FilledButton.styleFrom(
                                       backgroundColor: C.brand,
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      minimumSize: Size.zero,
+                                          horizontal: 16, vertical: 14),
+                                      minimumSize: const Size(0, 48),
                                       tapTargetSize:
                                           MaterialTapTargetSize.shrinkWrap,
                                       textStyle: const TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 14,
                                           fontWeight: FontWeight.w700),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
                                     ),
                                     onPressed: () => _confirmLunas(t),
                                     child: const Text('Lunas'),
@@ -1898,15 +1901,18 @@ class _LaporanPageState extends State<LaporanPage> {
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: C.danger,
                                       side: const BorderSide(
-                                          color: C.danger),
+                                          color: C.danger, width: 1.5),
                                       padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 6),
-                                      minimumSize: Size.zero,
+                                          horizontal: 16, vertical: 14),
+                                      minimumSize: const Size(0, 48),
                                       tapTargetSize:
                                           MaterialTapTargetSize.shrinkWrap,
                                       textStyle: const TextStyle(
-                                          fontSize: 12,
+                                          fontSize: 14,
                                           fontWeight: FontWeight.w700),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
                                     ),
                                     onPressed: () =>
                                         _konfirmasiBatalHutang(t),
@@ -2038,65 +2044,138 @@ class _LaporanPageState extends State<LaporanPage> {
             ),
           ),
           if (trx.status == 'hutang' && trx.namaHutang.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFEDD5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.person_outline,
-                        size: 18, color: Color(0xFFEA580C)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        trx.namaHutang,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF9A3412),
+            Builder(builder: (context) {
+              final isPc = MediaQuery.sizeOf(context).width >= 1100;
+
+              // Tablet/HP: tombol teks ditebalkan, disusun vertikal.
+              // PC: tombol icon di samping nama, sama seperti list transaksi.
+              Widget teksLunas() => FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: C.brand,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      minimumSize: const Size(0, 48),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _confirmLunas(trx),
+                    child: const Text('Lunas'),
+                  );
+              Widget teksBatalkan() => OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: C.danger,
+                      side: const BorderSide(color: C.danger, width: 1.5),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      minimumSize: const Size(0, 48),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => _konfirmasiBatalHutang(trx),
+                    child: const Text('Batalkan'),
+                  );
+
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFEDD5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: isPc
+                      // PC: nama + tombol icon dalam satu baris (ringkas).
+                      ? Row(
+                          children: [
+                            const Icon(Icons.person_outline,
+                                size: 20, color: Color(0xFFEA580C)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                trx.namaHutang,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: Color(0xFF9A3412),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: 'Lunas',
+                              onPressed: () => _confirmLunas(trx),
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                  minWidth: 44, minHeight: 44),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                backgroundColor: C.brand,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(12)),
+                              ),
+                              icon: const Icon(Icons.check_rounded, size: 22),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              tooltip: 'Batalkan',
+                              onPressed: () => _konfirmasiBatalHutang(trx),
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                  minWidth: 44, minHeight: 44),
+                              padding: EdgeInsets.zero,
+                              style: IconButton.styleFrom(
+                                foregroundColor: C.danger,
+                                side: const BorderSide(
+                                    color: C.danger, width: 1.5),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(12)),
+                              ),
+                              icon: const Icon(Icons.cancel_outlined, size: 22),
+                            ),
+                          ],
+                        )
+                      // Tablet/HP: nama di atas, tombol vertikal di bawahnya.
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.person_outline,
+                                    size: 20, color: Color(0xFFEA580C)),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    trx.namaHutang,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      color: Color(0xFF9A3412),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            teksLunas(),
+                            const SizedBox(height: 8),
+                            teksBatalkan(),
+                          ],
                         ),
-                      ),
-                    ),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: C.brand,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        textStyle: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w700),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28)),
-                      ),
-                      onPressed: () => _confirmLunas(trx),
-                      child: const Text('Lunas'),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: C.danger,
-                        side: const BorderSide(color: C.danger),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        textStyle: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w700),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28)),
-                      ),
-                      onPressed: () => _konfirmasiBatalHutang(trx),
-                      child: const Text('Batalkan'),
-                    ),
-                  ],
                 ),
-              ),
-            ),
+              );
+            }),
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
             child: Divider(),

@@ -19,10 +19,6 @@ double rFont(BuildContext context, double base) {
   return base * scale;
 }
 
-/// Apakah layout PC / layar lebar
-bool isWideScreen(BuildContext context) =>
-    MediaQuery.sizeOf(context).width >= 1100;
-
 class C {
   // Brand  indigo modern
   static const brand = Color(0xFF4F46E5);
