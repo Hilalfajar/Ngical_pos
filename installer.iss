@@ -14,7 +14,7 @@
 ; ============================================================
 
 #define MyAppName       "Ngical"
-#define MyAppVersion    "1.0.0"
+#define MyAppVersion    "1.1.33"
 #define MyAppPublisher  "Ngical"
 #define MyExeName       "Ngical.exe"
 #define MyReleaseDir    "build\windows\x64\runner\Release"

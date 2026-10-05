@@ -72,7 +72,7 @@ class AboutPage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Text(
-                        'Versi 1.1.28',
+                        'Versi 1.1.33',
                         style: TextStyle(
                           color: C.brand,
                           fontSize: 12,
