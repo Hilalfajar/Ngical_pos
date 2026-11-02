@@ -10,10 +10,6 @@ class App extends ChangeNotifier {
   final _db = Db.i;
 
   List<Produk> produk = [];
-  List<Bahan> bahan = [];
-
-  /// resep per produkId
-  Map<int, List<ResepItem>> resepMap = {};
 
   /// harga paket/grosir per produkId
   Map<int, List<HargaTier>> tierMap = {};
@@ -71,11 +67,7 @@ class App extends ChangeNotifier {
   int backupLastRunAt = 0; // millisecondsSinceEpoch, 0 = belum pernah
   String backupLastError = '';
 
-  /// Fitur HPP/resep bahan - nonaktif default (warung sembako tidak perlu)
-  bool hppEnabled = false;
-
-  // ─── Staff mode (opsional) ─────────────────────────────────
-  /// Default OFF → app terbuka bebas seperti sekarang
+  // ─── Staff mode (opsional) ─────────────────────────────────  /// Default OFF → app terbuka bebas seperti sekarang
   bool staffModeEnabled = false;
   List<Staff> staffList = [];
   Staff? currentStaff; // null = belum login
@@ -152,8 +144,6 @@ class App extends ChangeNotifier {
     await refreshProduk();
     await refreshTiers();
     await refreshStokUpdate();
-    await refreshBahan();
-    await refreshResep();
     await refreshTrx();
   }
 
@@ -193,16 +183,8 @@ class App extends ChangeNotifier {
     backupScope = prefs.getString('backupScope') ?? backupScope;
     backupLastRunAt = prefs.getInt('backupLastRunAt') ?? backupLastRunAt;
     backupLastError = prefs.getString('backupLastError') ?? backupLastError;
-    hppEnabled = prefs.getBool('hppEnabled') ?? hppEnabled;
     staffModeEnabled = prefs.getBool('staffModeEnabled') ?? false;
     notifyListeners();
-  }
-
-  Future<void> setHppEnabled(bool enabled) async {
-    hppEnabled = enabled;
-    notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('hppEnabled', enabled);
   }
 
   // ─── Staff ─────────────────────────────────────────────────
@@ -525,42 +507,11 @@ class App extends ChangeNotifier {
   List<HargaTier> tiersOf(int produkId) =>
       List<HargaTier>.from(tierMap[produkId] ?? const []);
 
-  Future<void> refreshBahan() async {
-    bahan = await _db.allBahan();
-    notifyListeners();
-  }
-
-  Future<void> refreshResep() async {
-    final all = await _db.allResep();
-    final map = <int, List<ResepItem>>{};
-    for (final r in all) {
-      map.putIfAbsent(r.produkId, () => []).add(r);
-    }
-    resepMap = map;
-    notifyListeners();
-  }
-
   Future<void> refreshTrx() async {
     transaksi = await _db.allTransaksi();
     allItems = await _db.allItems();
     notifyListeners();
   }
-
-  /// Hitung HPP (harga modal) dari resep produk
-  int hitungHpp(int produkId) {
-    final items = resepMap[produkId] ?? [];
-    if (items.isEmpty) return 0;
-    int total = 0;
-    for (final r in items) {
-      final b = bahan.where((e) => e.id == r.bahanId).firstOrNull;
-      if (b == null) continue;
-      total += (b.hargaPerSatuan * r.qty).round();
-    }
-    return total;
-  }
-
-  List<ResepItem> resepOf(int produkId) =>
-      List.unmodifiable(resepMap[produkId] ?? const []);
 
   /// null = sukses, string = alasan ditolak (untuk toast di UI)
   String? setTab(String t) {
@@ -724,7 +675,6 @@ class App extends ChangeNotifier {
 
     clearCart();
     await refreshProduk();
-    await refreshBahan(); // stok bahan ikut terpotong
     await refreshTrx();
 
     // Hutang tidak auto-print ke laporan keuangan; struk opsional tetap boleh
@@ -843,7 +793,6 @@ class App extends ChangeNotifier {
   Future<void> cancelTransaksi(int trxId) async {
     await _db.cancelTransaksi(trxId);
     await refreshProduk();
-    await refreshBahan();
     await refreshTrx();
   }
 
@@ -869,46 +818,14 @@ class App extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveProduk(Produk p,
-      {List<ResepItem>? resep, List<HargaTier>? tiers}) async {
+  Future<void> saveProduk(Produk p, {List<HargaTier>? tiers}) async {
     int id;
-    // Jika pakai HPP, modal dihitung otomatis
-    var toSave = p;
-    if (p.gunakanHpp && p.id != null) {
-      final hpp = hitungHpp(p.id!);
-      toSave = p.copyWith(hargaModal: hpp);
-    }
+    final toSave = p;
     if (toSave.id == null) {
       id = await _db.insertProduk(toSave);
     } else {
       id = toSave.id!;
       await _db.updateProduk(toSave);
-    }
-    if (resep != null) {
-      await _db.setResep(
-        id,
-        resep
-            .map((r) => ResepItem(
-                  id: r.id,
-                  produkId: id,
-                  bahanId: r.bahanId,
-                  qty: r.qty,
-                ))
-            .toList(),
-      );
-      await refreshResep();
-      // Setelah resep tersimpan, sync ulang harga modal dari HPP
-      if (toSave.gunakanHpp) {
-        final hpp = hitungHpp(id);
-        final updated =
-            (await _db.allProduk()).where((e) => e.id == id).firstOrNull;
-        if (updated != null) {
-          await _db.updateProduk(updated.copyWith(hargaModal: hpp));
-        }
-      }
-    } else if (!toSave.gunakanHpp && toSave.id != null) {
-      // Mode manual: hapus resep lama biar tidak membingungkan
-      // (opsional - biarkan resep tetap ada kalau user tinggal matikan switch)
     }
     if (tiers != null) {
       await _db.setTiers(id, tiers);
@@ -918,10 +835,8 @@ class App extends ChangeNotifier {
   }
 
   Future<void> deleteProduk(int id) async {
-    await _db.deleteResepOf(id);
     await _db.deleteTiersOf(id);
     await _db.deleteProduk(id);
-    await refreshResep();
     await refreshTiers();
     await refreshProduk();
   }
@@ -1006,63 +921,12 @@ class App extends ChangeNotifier {
     return n;
   }
 
-  Future<void> saveBahan(Bahan b) async {
-    if (b.id == null) {
-      await _db.insertBahan(b);
-    } else {
-      await _db.updateBahan(b);
-    }
-    await refreshBahan();
-    // Update harga modal semua produk HPP yang memakai bahan ini
-    await _syncHppAll();
-  }
-
-  /// Restok bahan: tambah stok + update harga acuan (tanpa ubah resep)
-  /// [qty] jumlah yang baru dibeli, [hargaTotal] total bayar untuk qty itu.
-  Future<void> restokBahan(Bahan b, double qty, int hargaTotal) async {
-    if (b.id == null || qty <= 0) return;
-    final newStok = b.stok + qty;
-    // Harga acuan pakai pembelian terakhir (sederhana & jelas untuk user)
-    final updated = b.copyWith(
-      stok: newStok,
-      jumlahBeli: qty,
-      hargaBeli: hargaTotal,
-    );
-    await _db.updateBahan(updated);
-    await refreshBahan();
-    await _syncHppAll();
-  }
-
-  Future<void> deleteBahan(int id) async {
-    await _db.deleteBahan(id);
-    await refreshBahan();
-    await refreshResep();
-    await _syncHppAll();
-  }
-
-  /// Hitung ulang harga modal semua produk yang gunakanHpp
-  Future<void> _syncHppAll() async {
-    await refreshResep();
-    var changed = false;
-    for (final p in List<Produk>.from(produk)) {
-      if (!p.gunakanHpp || p.id == null) continue;
-      final hpp = hitungHpp(p.id!);
-      if (hpp != p.hargaModal) {
-        await _db.updateProduk(p.copyWith(hargaModal: hpp));
-        changed = true;
-      }
-    }
-    if (changed) await refreshProduk();
-  }
-
   Future<List<TransaksiItem>> itemsOf(int id) => _db.itemsOf(id);
 
   Future<void> clearAll() async {
     await _db.clearAll();
     clearCart();
     await refreshProduk();
-    await refreshBahan();
-    await refreshResep();
     await refreshTrx();
   }
 
@@ -1138,9 +1002,9 @@ class App extends ChangeNotifier {
     final incomingProduks = (data['produks'] as List? ?? [])
         .map((e) => Produk.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
-    final existingIds = produk.map((p) => p.id).toSet();
+    final existingNames = produk.map((p) => p.nama.toLowerCase().trim()).toSet();
     for (final p in incomingProduks) {
-      if (p.id != null && existingIds.contains(p.id)) continue;
+      if (existingNames.contains(p.nama.toLowerCase().trim())) continue;
       await _db.insertProduk(p.copyWith(id: null));
       addedProduk++;
     }
@@ -1191,10 +1055,10 @@ class App extends ChangeNotifier {
 
   Future<int> restoreProdukOnly(List<dynamic> list) async {
     int added = 0;
-    final existingIds = produk.map((p) => p.id).toSet();
+    final existingNames = produk.map((p) => p.nama.toLowerCase().trim()).toSet();
     for (final e in list) {
       final p = Produk.fromMap(Map<String, dynamic>.from(e as Map));
-      if (p.id != null && existingIds.contains(p.id)) continue;
+      if (existingNames.contains(p.nama.toLowerCase().trim())) continue;
       await _db.insertProduk(p.copyWith(id: null));
       added++;
     }
