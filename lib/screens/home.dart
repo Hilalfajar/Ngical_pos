@@ -9,7 +9,6 @@ import 'update_stok.dart';
 import 'laporan.dart';
 import 'simple.dart';
 import 'printer.dart';
-import 'staff.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -56,8 +55,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return const SettingsPage();
       case 'SettingsMenu':
         return const SettingsMenuPage();
-      case 'Staff':
-        return const StaffPage();
       case 'Backup':
         return const BackupPage();
       case 'Printer':
@@ -72,13 +69,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final a = context.watch<App>();
 
     // Navigasi back sistem:
-    // - Settings detail (Staff/Printer/Backup/About/Settings) → SettingsMenu
+    // - Settings detail (Printer/Backup/About/Settings) → SettingsMenu
     // - SettingsMenu / Produk / Transaksi → POS
     // - POS → keluar app
     const settingsDetail = {
       'Settings',
       'Printer',
-      'Staff',
       'Backup',
       'About',
     };

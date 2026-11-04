@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/db.dart';
@@ -67,57 +68,6 @@ class App extends ChangeNotifier {
   int backupLastRunAt = 0; // millisecondsSinceEpoch, 0 = belum pernah
   String backupLastError = '';
 
-  // ─── Staff mode (opsional) ─────────────────────────────────  /// Default OFF → app terbuka bebas seperti sekarang
-  bool staffModeEnabled = false;
-  List<Staff> staffList = [];
-  Staff? currentStaff; // null = belum login
-
-  bool get isStaffLoggedIn => currentStaff != null;
-  bool get isManagerLoggedIn => currentStaff?.isManager == true;
-  bool get hasManager => staffList.any((s) => s.role == 'Manager' && s.aktif);
-
-  /// Mapping tab UI → key permission
-  static const Map<String, String> tabPermissionKey = {
-    'POS': 'pos',
-    'Produk': 'produk',
-    'UpdateStok': 'produk',
-    'Transaksi': 'laporan',
-    'Staff': 'staff',
-    'Printer': 'printer',
-    'Backup': 'backup',
-    'Settings': 'settings',
-    'SettingsMenu': 'settings',
-    'About': 'settings',
-  };
-
-  /// Cek apakah menu boleh dibuka
-  bool canAccessMenu(String tabOrKey) {
-    // Mode staff OFF → semua bebas
-    if (!staffModeEnabled) return true;
-
-    // SettingsMenu: boleh jika ada minimal 1 sub-menu yang diizinkan
-    if (tabOrKey == 'SettingsMenu') {
-      const subs = ['settings', 'printer', 'staff', 'backup'];
-      return subs.any(canAccessMenu);
-    }
-
-    final key = tabPermissionKey[tabOrKey] ?? tabOrKey;
-
-    // Belum login → izinkan area pengaturan agar bisa buka Staff
-    if (currentStaff == null) {
-      return key == 'staff' || key == 'settings' || key == 'printer';
-    }
-
-    // Manager → semua
-    if (currentStaff!.isManager) return true;
-
-    // Non-manager → sesuai permissions
-    return currentStaff!.permissions.contains(key);
-  }
-
-  /// Apakah transaksi (kasir/produk/laporan) terkunci karena mode staff?
-  bool get isOpsLocked => staffModeEnabled && currentStaff == null;
-
   double get cartQty => cart.values.fold(0.0, (s, e) => s + e.qty);
   int get cartTotal => cart.values.fold(0, (s, e) => s + e.subtotal);
   int get totalPendapatan => transaksi
@@ -140,7 +90,6 @@ class App extends ChangeNotifier {
 
   Future<void> init() async {
     await _loadSettings();
-    await refreshStaff();
     await refreshProduk();
     await refreshTiers();
     await refreshStokUpdate();
@@ -183,117 +132,7 @@ class App extends ChangeNotifier {
     backupScope = prefs.getString('backupScope') ?? backupScope;
     backupLastRunAt = prefs.getInt('backupLastRunAt') ?? backupLastRunAt;
     backupLastError = prefs.getString('backupLastError') ?? backupLastError;
-    staffModeEnabled = prefs.getBool('staffModeEnabled') ?? false;
     notifyListeners();
-  }
-
-  // ─── Staff ─────────────────────────────────────────────────
-
-  Future<void> refreshStaff() async {
-    staffList = await _db.allStaff();
-    // Jika current staff dihapus / nonaktif, logout
-    if (currentStaff != null) {
-      final still = staffList.where((s) => s.id == currentStaff!.id).toList();
-      if (still.isEmpty || !still.first.aktif) {
-        currentStaff = null;
-      } else {
-        currentStaff = still.first;
-      }
-    }
-    notifyListeners();
-  }
-
-  /// Nyalakan / matikan mode staff. Hanya Manager (atau belum ada manager sama sekali untuk setup awal).
-  Future<String?> setStaffModeEnabled(bool enabled) async {
-    if (enabled) {
-      if (!hasManager) {
-        return 'Buat akun Manager dulu sebelum mengaktifkan Mode Staff.';
-      }
-      // Harus login sebagai Manager untuk ON
-      if (currentStaff == null || !currentStaff!.isManager) {
-        return 'Login sebagai Manager untuk mengaktifkan Mode Staff.';
-      }
-    } else {
-      // OFF juga hanya Manager
-      if (currentStaff == null || !currentStaff!.isManager) {
-        return 'Login sebagai Manager untuk mematikan Mode Staff.';
-      }
-    }
-    staffModeEnabled = enabled;
-    if (!enabled) {
-      // Saat OFF, sesi login tidak wajib - boleh tetap login atau clear
-      // Kita biarkan session, tapi akses sudah bebas.
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('staffModeEnabled', enabled);
-    notifyListeners();
-    return null;
-  }
-
-  /// Login dengan PIN. Return error message atau null jika sukses.
-  Future<String?> loginStaff(
-      {required int staffId, required String pin}) async {
-    final match = staffList.where((s) => s.id == staffId).toList();
-    if (match.isEmpty) return 'Staff tidak ditemukan.';
-    final s = match.first;
-    if (!s.aktif) return 'Akun staff nonaktif.';
-    if (s.pin != pin) return 'PIN salah.';
-    currentStaff = s;
-    notifyListeners();
-    return null;
-  }
-
-  void logoutStaff() {
-    currentStaff = null;
-    // Kalau mode staff ON, arahkan ke tab Staff biar bisa login lagi
-    if (staffModeEnabled && !canAccessMenu(tab)) {
-      tab = 'Staff';
-    }
-    notifyListeners();
-  }
-
-  Future<String?> saveStaff(Staff s) async {
-    // Aturan:
-    // - Belum ada Manager sama sekali → boleh tambah bebas (akun pertama = Manager)
-    // - Sudah ada Manager → wajib login sebagai Manager
-    if (hasManager && (currentStaff == null || !currentStaff!.isManager)) {
-      return 'Login sebagai Manager untuk mengelola user.';
-    }
-
-    // Pastikan permissions
-    final toSave = s.copyWith(
-      permissions: s.isManager
-          ? Staff.defaultPermissions('Manager')
-          : (s.permissions.isEmpty
-              ? Staff.defaultPermissions(s.role)
-              : s.permissions),
-    );
-
-    if (toSave.id == null) {
-      await _db.insertStaff(toSave);
-    } else {
-      await _db.updateStaff(toSave);
-    }
-    await refreshStaff();
-    return null;
-  }
-
-  Future<String?> deleteStaffById(int id) async {
-    if (hasManager && (currentStaff == null || !currentStaff!.isManager)) {
-      return 'Login sebagai Manager untuk menghapus user.';
-    }
-    // Jangan hapus manager terakhir kalau mode staff ON
-    final target = staffList.where((s) => s.id == id).toList();
-    if (target.isNotEmpty &&
-        target.first.role == 'Manager' &&
-        staffList.where((s) => s.role == 'Manager' && s.aktif).length <= 1 &&
-        staffModeEnabled) {
-      return 'Tidak bisa hapus Manager terakhir saat Mode Staff aktif.';
-    }
-    await _db.deleteStaff(id);
-    if (currentStaff?.id == id) currentStaff = null;
-    await refreshStaff();
-    return null;
   }
 
   Future<void> saveSettings({
@@ -513,22 +352,9 @@ class App extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// null = sukses, string = alasan ditolak (untuk toast di UI)
-  String? setTab(String t) {
-    if (!canAccessMenu(t)) {
-      if (staffModeEnabled && currentStaff == null) {
-        // Belum login → ke halaman Staff untuk login
-        tab = 'Staff';
-        notifyListeners();
-        return 'Login staff dulu untuk membuka menu ini';
-      }
-      // Sudah login tapi tidak punya permission
-      notifyListeners();
-      return 'Akun ${currentStaff?.role ?? ''} tidak punya akses menu ini';
-    }
+  void setTab(String t) {
     tab = t;
     notifyListeners();
-    return null;
   }
 
   void setRailExpanded(bool v) {
@@ -993,64 +819,86 @@ class App extends ChangeNotifier {
   }
 
   Future<Map<String, int>> restoreFromJson(Map<String, dynamic> data) async {
-    int addedProduk = 0, addedTrx = 0, addedItems = 0;
-
     if (data['settings'] != null) {
       await restoreSettings(Map<String, dynamic>.from(data['settings'] as Map));
     }
 
-    final incomingProduks = (data['produks'] as List? ?? [])
-        .map((e) => Produk.fromMap(Map<String, dynamic>.from(e as Map)))
+    final keys = _BackupIdKeys();
+    final produkRows = backupRows(data, const ['produks', 'produk'])
+        .map((e) => keys.normalize(backupRow(e), const ['id']))
         .toList();
-    final existingNames = produk.map((p) => p.nama.toLowerCase().trim()).toSet();
-    for (final p in incomingProduks) {
-      if (existingNames.contains(p.nama.toLowerCase().trim())) continue;
-      await _db.insertProduk(p.copyWith(id: null));
-      addedProduk++;
+    final itemRows = backupRows(data, const ['transaksiItems'])
+        .map((e) =>
+            keys.normalize(backupRow(e), const ['id', 'transaksiId', 'produkId']))
+        .toList();
+    final trxRows = backupRows(data, const ['transaksis', 'transaksi'])
+        .map((e) => keys.normalize(backupRow(e), const ['id']))
+        .toList();
+
+    // Path foto backup online menunjuk ke storage server, bukan ke mesin ini.
+    // Kosongkan yang tidak ada di disk supaya daftarnya tidak menampilkan
+    // gambar rusak.
+    for (final m in produkRows) {
+      final f = m['foto'];
+      if (f is String && f.isNotEmpty && !File(f).existsSync()) m['foto'] = null;
     }
 
-    if (data.containsKey('transaksis')) {
-      final incomingTrx = (data['transaksis'] as List? ?? [])
-          .map((e) => Transaksi.fromMap(Map<String, dynamic>.from(e as Map)))
-          .toList();
-      final existingTrxIds = transaksi.map((t) => t.id).toSet();
-      for (final t in incomingTrx) {
-        if (t.id != null && existingTrxIds.contains(t.id)) continue;
-        final newId = await _db.insertTransaksi(Transaksi(
-          tanggal: t.tanggal,
-          totalBelanja: t.totalBelanja,
-          totalBayar: t.totalBayar,
-          kembalian: t.kembalian,
-          metode: t.metode,
-          status: t.status,
-          namaHutang: t.namaHutang,
-        ));
-        addedTrx++;
-        final itemsForTrx = (data['transaksiItems'] as List? ?? [])
-            .map((e) =>
-                TransaksiItem.fromMap(Map<String, dynamic>.from(e as Map)))
-            .where((i) => i.transaksiId == t.id)
-            .map((i) => TransaksiItem(
-                  transaksiId: newId,
-                  produkId: i.produkId,
-                  namaProduk: i.namaProduk,
-                  hargaModal: i.hargaModal,
-                  hargaSatuan: i.hargaSatuan,
-                  jumlah: i.jumlah,
-                  subtotal: i.subtotal,
-                ))
-            .toList();
-        if (itemsForTrx.isNotEmpty) {
-          await _db.insertItems(itemsForTrx);
-          addedItems += itemsForTrx.length;
-        }
-      }
+    final incomingProduks = produkRows.map(Produk.fromMap).toList();
+    // Nama saja tidak cukup: ada produk berbeda dengan nama sama. Cocokkan
+    // juga barcode, harga, dan stok supaya tidak ada produk yang hilang.
+    String produkKey(Produk p) =>
+        '${p.nama.toLowerCase().trim()}|${p.barcode ?? ''}|'
+        '${p.harga}|${p.stok}';
+    final existingByKey = <String, int>{};
+    for (final p in produk) {
+      if (p.id != null) existingByKey[produkKey(p)] = p.id!;
     }
+    final seenKeys = <String>{};
+    final existingProdukIds = <int, int>{};
+    final produksToAdd = <Produk>[];
+    for (final p in incomingProduks) {
+      final key = produkKey(p);
+      if (!seenKeys.add(key)) continue;
+      final existingId = existingByKey[key];
+      if (existingId != null) {
+        if (p.id != null) existingProdukIds[p.id!] = existingId;
+        continue;
+      }
+      produksToAdd.add(p);
+    }
+
+    // Kelompokkan item sekali saja. Cara lama memindai semua item untuk
+    // setiap transaksi, yang sangat lambat untuk backup besar.
+    final itemsByTrx = <int, List<TransaksiItem>>{};
+    for (final e in itemRows) {
+      final it = TransaksiItem.fromMap(e);
+      itemsByTrx.putIfAbsent(it.transaksiId, () => []).add(it);
+    }
+
+    final incomingTrx = trxRows.map(Transaksi.fromMap).toList();
+    // Cocokkan lewat isi transaksi, bukan ID. ID dari file hasil konversi
+    // mulai dari 1 sehingga bisa bentrok dengan ID database lokal.
+    String trxKey(Transaksi t) =>
+        '${t.tanggal}|${t.noUrut}|'
+        '${t.totalBelanja}|${t.totalBayar}';
+    final existingTrxKeys = transaksi.map(trxKey).toSet();
+    final trxToAdd = <Transaksi>[];
+    for (final t in incomingTrx) {
+      if (!existingTrxKeys.add(trxKey(t))) continue;
+      trxToAdd.add(t);
+    }
+
+    final result = await _db.restoreFromBackup(
+      produks: produksToAdd,
+      transaksis: trxToAdd,
+      itemsByTrx: itemsByTrx,
+      existingProdukIds: existingProdukIds,
+    );
 
     clearCart();
     await refreshProduk();
     await refreshTrx();
-    return {'produk': addedProduk, 'transaksi': addedTrx, 'items': addedItems};
+    return result;
   }
 
   Future<int> restoreProdukOnly(List<dynamic> list) async {
@@ -1064,5 +912,34 @@ class App extends ChangeNotifier {
     }
     await refreshProduk();
     return added;
+  }
+}
+
+/// Baris backup bisa memakai nama key versi offline ('produks') atau versi
+/// online ('produk'); yang pertama ditemukan dipakai.
+List<dynamic> backupRows(Map<String, dynamic> data, List<String> names) {
+  for (final n in names) {
+    final v = data[n];
+    if (v is List) return v;
+  }
+  return const [];
+}
+
+Map<String, dynamic> backupRow(dynamic e) => Map<String, dynamic>.from(e as Map);
+
+/// ID di backup versi online berupa UUID (Supabase), sedangkan model offline
+/// menyimpan ID sebagai int. Setiap ID string dapat angka urut yang sama
+/// sepanjang satu restore, jadi relasi produk-transaksi-item tetap cocok.
+class _BackupIdKeys {
+  final _ids = <String, int>{};
+
+  Map<String, dynamic> normalize(
+      Map<String, dynamic> row, List<String> fields) {
+    for (final f in fields) {
+      final raw = row[f]?.toString().trim();
+      row[f] =
+          (raw == null || raw.isEmpty) ? null : _ids.putIfAbsent(raw, () => _ids.length + 1);
+    }
+    return row;
   }
 }

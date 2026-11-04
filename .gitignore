@@ -62,3 +62,10 @@ Thumbs.db
 .CATATAN_FASE_0_1.md
 .KODE_LISENSI_CONTOH.txt
 .RENCANA_IMPLEMENTASI_SUPABASE_MULTI_CABANG.md
+
+# ==============================
+# Data toko asli (backup/hasil build) - repo ini publik
+# ==============================
+Ngical_Backup_*.zip
+Ngical_pos*.zip
+.agents/

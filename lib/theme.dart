@@ -204,7 +204,6 @@ class PageHeader extends StatelessWidget {
     const settingsDetail = {
       'Settings',
       'Printer',
-      'Staff',
       'Backup',
       'About',
     };

@@ -1,3 +1,29 @@
+/// Baris dari sqflite selalu int/double, tapi backup versi online membawa
+/// angka sebagai string (mis. id "770") karena dijawab lewat API. Semua
+/// fromMap memakai dua fungsi ini supaya kedua format file bisa dibaca.
+int? asIntOrNull(dynamic v) {
+  if (v == null || v is String) return int.tryParse('${v ?? ''}'.trim());
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return null;
+}
+
+double? asDoubleOrNull(dynamic v) {
+  if (v == null || v is String) return double.tryParse('${v ?? ''}'.trim());
+  if (v is double) return v;
+  if (v is num) return v.toDouble();
+  return null;
+}
+
+/// Kolom wajib: gagal dengan nama kolom daripada menyimpan 0 diam-diam.
+Never badValue(String field, dynamic v) =>
+    throw FormatException('Kolom "$field" bukan angka: $v');
+
+int asInt(dynamic v, String field) => asIntOrNull(v) ?? badValue(field, v);
+
+double asDouble(dynamic v, String field) =>
+    asDoubleOrNull(v) ?? badValue(field, v);
+
 class Produk {
   final int? id;
   final String nama;
@@ -9,9 +35,6 @@ class Produk {
   final String? foto;
   final String? kategori;
 
-  /// true = harga modal dihitung dari resep HPP
-  final bool gunakanHpp;
-
   const Produk({
     this.id,
     required this.nama,
@@ -22,7 +45,6 @@ class Produk {
     required this.stok,
     this.foto,
     this.kategori,
-    this.gunakanHpp = false,
   });
 
   Produk copyWith({
@@ -35,7 +57,6 @@ class Produk {
     double? stok,
     String? foto,
     String? kategori,
-    bool? gunakanHpp,
     bool clearKategori = false,
   }) {
     return Produk(
@@ -48,7 +69,6 @@ class Produk {
       stok: stok ?? this.stok,
       foto: foto ?? this.foto,
       kategori: clearKategori ? null : (kategori ?? this.kategori),
-      gunakanHpp: gunakanHpp ?? this.gunakanHpp,
     );
   }
 
@@ -62,117 +82,21 @@ class Produk {
         'stok': stok,
         'foto': foto,
         'kategori': kategori,
-        'gunakanHpp': gunakanHpp ? 1 : 0,
       };
 
   factory Produk.fromMap(Map<String, dynamic> m) => Produk(
-        id: m['id'] as int?,
+        id: asIntOrNull(m['id']),
         nama: m['nama'] as String,
         satuan: (m['satuan'] as String?) ?? 'pcs',
         barcode: m['barcode'] as String?,
-        hargaModal: (m['hargaModal'] as num?)?.toInt() ?? 0,
-        harga: (m['harga'] as num).toInt(),
-        stok: (m['stok'] as num).toDouble(),
+        hargaModal: asIntOrNull(m['hargaModal']) ?? 0,
+        harga: asInt(m['harga'], 'harga'),
+        stok: asDouble(m['stok'], 'stok'),
         foto: m['foto'] as String?,
         kategori: m['kategori'] as String?,
-        gunakanHpp: ((m['gunakanHpp'] as num?)?.toInt() ?? 0) == 1,
       );
 }
 
-/// Bahan baku (terpisah dari produk jual)
-class Bahan {
-  final int? id;
-  final String nama;
-  final String satuan; // g, ml, pcs, kg, ...
-  /// Harga beli untuk [jumlahBeli] satuan (mis. 10 kg = 10000)
-  final int hargaBeli;
-
-  /// Jumlah satuan saat beli (mis. 10 untuk 10 kg, 100 untuk 100 ml)
-  final double jumlahBeli;
-
-  /// Stok sisa dalam satuan dasar (g, ml, pcs)
-  final double stok;
-
-  const Bahan({
-    this.id,
-    required this.nama,
-    this.satuan = 'g',
-    this.hargaBeli = 0,
-    this.jumlahBeli = 1,
-    this.stok = 0,
-  });
-
-  /// Harga per 1 satuan (dibulatkan ke int rupiah)
-  int get hargaPerSatuan {
-    if (jumlahBeli <= 0) return 0;
-    return (hargaBeli / jumlahBeli).round();
-  }
-
-  Bahan copyWith({
-    int? id,
-    String? nama,
-    String? satuan,
-    int? hargaBeli,
-    double? jumlahBeli,
-    double? stok,
-  }) {
-    return Bahan(
-      id: id ?? this.id,
-      nama: nama ?? this.nama,
-      satuan: satuan ?? this.satuan,
-      hargaBeli: hargaBeli ?? this.hargaBeli,
-      jumlahBeli: jumlahBeli ?? this.jumlahBeli,
-      stok: stok ?? this.stok,
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-        if (id != null) 'id': id,
-        'nama': nama,
-        'satuan': satuan,
-        'hargaBeli': hargaBeli,
-        'jumlahBeli': jumlahBeli,
-        'stok': stok,
-      };
-
-  factory Bahan.fromMap(Map<String, dynamic> m) => Bahan(
-        id: m['id'] as int?,
-        nama: m['nama'] as String,
-        satuan: (m['satuan'] as String?) ?? 'g',
-        hargaBeli: (m['hargaBeli'] as num?)?.toInt() ?? 0,
-        jumlahBeli: (m['jumlahBeli'] as num?)?.toDouble() ?? 1,
-        stok: (m['stok'] as num?)?.toDouble() ?? 0,
-      );
-}
-
-/// Satu baris resep: produk X memakai [qty] satuan [bahanId]
-class ResepItem {
-  final int? id;
-  final int produkId;
-  final int bahanId;
-  final double qty;
-
-  const ResepItem({
-    this.id,
-    required this.produkId,
-    required this.bahanId,
-    required this.qty,
-  });
-
-  Map<String, dynamic> toMap() => {
-        if (id != null) 'id': id,
-        'produkId': produkId,
-        'bahanId': bahanId,
-        'qty': qty,
-      };
-
-  factory ResepItem.fromMap(Map<String, dynamic> m) => ResepItem(
-        id: m['id'] as int?,
-        produkId: (m['produkId'] as num).toInt(),
-        bahanId: (m['bahanId'] as num).toInt(),
-        qty: (m['qty'] as num).toDouble(),
-      );
-}
 
 class Transaksi {
   final int? id;
@@ -210,12 +134,12 @@ class Transaksi {
       };
 
   factory Transaksi.fromMap(Map<String, dynamic> m) => Transaksi(
-        id: m['id'] as int?,
-        tanggal: (m['tanggal'] as num).toInt(),
-        totalBelanja: (m['totalBelanja'] as num).toInt(),
-        totalBayar: (m['totalBayar'] as num).toInt(),
-        kembalian: (m['kembalian'] as num).toInt(),
-        noUrut: (m['noUrut'] as num?)?.toInt() ?? 0,
+        id: asIntOrNull(m['id']),
+        tanggal: asInt(m['tanggal'], 'tanggal'),
+        totalBelanja: asInt(m['totalBelanja'], 'totalBelanja'),
+        totalBayar: asInt(m['totalBayar'], 'totalBayar'),
+        kembalian: asInt(m['kembalian'], 'kembalian'),
+        noUrut: asIntOrNull(m['noUrut']) ?? 0,
         metode: (m['metode'] as String?) ?? 'cash',
         status: (m['status'] as String?) ?? 'selesai',
         namaHutang: (m['namaHutang'] as String?) ?? '',
@@ -255,14 +179,14 @@ class TransaksiItem {
       };
 
   factory TransaksiItem.fromMap(Map<String, dynamic> m) => TransaksiItem(
-        id: m['id'] as int?,
-        transaksiId: (m['transaksiId'] as num).toInt(),
-        produkId: (m['produkId'] as num).toInt(),
+        id: asIntOrNull(m['id']),
+        transaksiId: asInt(m['transaksiId'], 'transaksiId'),
+        produkId: asInt(m['produkId'], 'produkId'),
         namaProduk: m['namaProduk'] as String,
-        hargaModal: (m['hargaModal'] as num?)?.toInt() ?? 0,
-        hargaSatuan: (m['hargaSatuan'] as num).toInt(),
-        jumlah: (m['jumlah'] as num).toDouble(),
-        subtotal: (m['subtotal'] as num).toInt(),
+        hargaModal: asIntOrNull(m['hargaModal']) ?? 0,
+        hargaSatuan: asInt(m['hargaSatuan'], 'hargaSatuan'),
+        jumlah: asDouble(m['jumlah'], 'jumlah'),
+        subtotal: asInt(m['subtotal'], 'subtotal'),
       );
 }
 
@@ -307,10 +231,10 @@ class HargaTier {
       };
 
   factory HargaTier.fromMap(Map<String, dynamic> m) => HargaTier(
-        id: m['id'] as int?,
-        produkId: (m['produkId'] as num?)?.toInt() ?? 0,
-        minQty: (m['minQty'] as num?)?.toDouble() ?? 1,
-        harga: (m['harga'] as num?)?.toInt() ?? 0,
+        id: asIntOrNull(m['id']),
+        produkId: asIntOrNull(m['produkId']) ?? 0,
+        minQty: asDoubleOrNull(m['minQty']) ?? 1,
+        harga: asIntOrNull(m['harga']) ?? 0,
         label: (m['label'] as String?) ?? '',
       );
 
@@ -371,100 +295,6 @@ class CartItem {
   int get subtotal => HargaTier.lineTotal(qty, harga, tiers);
 }
 
-/// Akun staff (Manager / Admin / Kasir)
-class Staff {
-  final int? id;
-  final String nama;
-  final String pin;
-
-  /// Manager | Admin | Kasir
-  final String role;
-  final bool aktif;
-
-  /// Menu yang boleh dibuka (khusus non-Manager).
-  /// Key: pos, produk, laporan, staff, printer, backup, settings, license
-  final List<String> permissions;
-
-  const Staff({
-    this.id,
-    required this.nama,
-    required this.pin,
-    required this.role,
-    this.aktif = true,
-    this.permissions = const [],
-  });
-
-  bool get isManager => role == 'Manager';
-
-  Staff copyWith({
-    int? id,
-    String? nama,
-    String? pin,
-    String? role,
-    bool? aktif,
-    List<String>? permissions,
-  }) {
-    return Staff(
-      id: id ?? this.id,
-      nama: nama ?? this.nama,
-      pin: pin ?? this.pin,
-      role: role ?? this.role,
-      aktif: aktif ?? this.aktif,
-      permissions: permissions ?? this.permissions,
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-        if (id != null) 'id': id,
-        'nama': nama,
-        'pin': pin,
-        'role': role,
-        'aktif': aktif ? 1 : 0,
-        'permissions': permissions.join(','),
-      };
-
-  factory Staff.fromMap(Map<String, dynamic> m) {
-    final raw = (m['permissions'] as String?) ?? '';
-    final perms = raw.isEmpty
-        ? <String>[]
-        : raw
-            .split(',')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
-    return Staff(
-      id: m['id'] as int?,
-      nama: m['nama'] as String,
-      pin: m['pin'] as String,
-      role: m['role'] as String,
-      aktif: ((m['aktif'] as num?)?.toInt() ?? 1) == 1,
-      permissions: perms,
-    );
-  }
-
-  /// Default permission per role
-  static List<String> defaultPermissions(String role) {
-    switch (role) {
-      case 'Manager':
-        return const [
-          'pos',
-          'produk',
-          'laporan',
-          'staff',
-          'printer',
-          'backup',
-          'settings',
-          'license'
-        ];
-      case 'Admin':
-        return const ['pos', 'produk', 'laporan', 'printer', 'settings'];
-      case 'Kasir':
-      default:
-        return const ['pos', 'printer'];
-    }
-  }
-}
-
 /// Header satu sesi update stok
 class StokUpdate {
   final int? id;
@@ -495,11 +325,11 @@ class StokUpdate {
       };
 
   factory StokUpdate.fromMap(Map<String, dynamic> m) => StokUpdate(
-        id: m['id'] as int?,
-        tanggal: (m['tanggal'] as num).toInt(),
-        noUrut: (m['noUrut'] as num).toInt(),
-        totalItem: (m['totalItem'] as num).toInt(),
-        totalQty: (m['totalQty'] as num).toDouble(),
+        id: asIntOrNull(m['id']),
+        tanggal: asInt(m['tanggal'], 'tanggal'),
+        noUrut: asInt(m['noUrut'], 'noUrut'),
+        totalItem: asInt(m['totalItem'], 'totalItem'),
+        totalQty: asDouble(m['totalQty'], 'totalQty'),
       );
 }
 
@@ -534,12 +364,12 @@ class StokUpdateItem {
       };
 
   factory StokUpdateItem.fromMap(Map<String, dynamic> m) => StokUpdateItem(
-        id: m['id'] as int?,
-        updateId: (m['updateId'] as num).toInt(),
-        produkId: (m['produkId'] as num).toInt(),
+        id: asIntOrNull(m['id']),
+        updateId: asInt(m['updateId'], 'updateId'),
+        produkId: asInt(m['produkId'], 'produkId'),
         namaProduk: (m['namaProduk'] as String?) ?? '',
-        qty: (m['qty'] as num).toDouble(),
-        stokSebelum: (m['stokSebelum'] as num).toDouble(),
-        stokSesudah: (m['stokSesudah'] as num).toDouble(),
+        qty: asDouble(m['qty'], 'qty'),
+        stokSebelum: asDouble(m['stokSebelum'], 'stokSebelum'),
+        stokSesudah: asDouble(m['stokSesudah'], 'stokSesudah'),
       );
 }

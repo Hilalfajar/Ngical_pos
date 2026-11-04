@@ -13,7 +13,6 @@ import '../models/models.dart';
 import '../providers/app.dart';
 import '../theme.dart';
 import '../utils/formatter.dart';
-import 'bahan.dart';
 import '../utils/toast.dart';
 
 class ProdukPage extends StatefulWidget {
@@ -22,11 +21,9 @@ class ProdukPage extends StatefulWidget {
   State<ProdukPage> createState() => _ProdukPageState();
 }
 
-class _ProdukPageState extends State<ProdukPage>
-    with SingleTickerProviderStateMixin {
+class _ProdukPageState extends State<ProdukPage> {
   final _q = TextEditingController();
   String query = '';
-  late final TabController _tab;
 
   /// PC: produk yang sedang diedit di panel kanan (null = mode tambah)
   Produk? _pcEditing;
@@ -41,15 +38,9 @@ class _ProdukPageState extends State<ProdukPage>
   @override
   void initState() {
     super.initState();
-    // Panjang tetap 3 agar tidak dispose TabController saat build (bisa bikin blank)
-    _tab = TabController(length: 2, vsync: this);
-    _tab.addListener(() => setState(() {}));
   }
 
-  String _subtitle(App a) {
-    if (_tab.index == 0) return '${a.produk.length} item terdaftar';
-    return '${a.bahan.length} bahan baku';
-  }
+  String _subtitle(App a) => '${a.produk.length} item terdaftar';
 
   bool get _canScanCamera {
     if (kIsWeb) return false;
@@ -85,7 +76,6 @@ class _ProdukPageState extends State<ProdukPage>
   @override
   void dispose() {
     _q.dispose();
-    _tab.dispose();
     _scanCtrl?.dispose();
     _scanDebounce?.cancel();
     super.dispose();
@@ -124,48 +114,14 @@ class _ProdukPageState extends State<ProdukPage>
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Icon(
-                          _tab.index == 0
-                              ? Icons.inventory_2_rounded
-                              : Icons.science_outlined,
+                          Icons.inventory_2_rounded,
                           color: C.brand,
                           size: 22,
                         ),
                       ),
                     ),
-                    // Tab: Produk Jual | Bahan HPP
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-                      child: Container(
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: C.surface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: TabBar(
-                          controller: _tab,
-                          indicator: BoxDecoration(
-                            color: C.brand,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          labelColor: Colors.white,
-                          unselectedLabelColor: C.muted,
-                          labelStyle: const TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 12),
-                          unselectedLabelStyle: const TextStyle(
-                              fontWeight: FontWeight.w500, fontSize: 12),
-                          dividerColor: Colors.transparent,
-                          tabs: const [
-                            Tab(text: 'Produk Jual'),
-                            Tab(text: 'Bahan HPP'),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    if (_tab.index == 0) ...[
-                      // Scanner (mobile/tablet only)
-                      if (!isPc && _scanning)
+                    // Scanner (mobile/tablet only)
+                    if (!isPc && _scanning)
                         Container(
                           height: 180,
                           margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
@@ -338,23 +294,6 @@ class _ProdukPageState extends State<ProdukPage>
                                 },
                               ),
                       ),
-                    ] else
-                      // Tab Bahan HPP
-                      Expanded(
-                        child: a.hppEnabled
-                            ? const BahanPage()
-                            : Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: Text(
-                                    'Fitur Bahan HPP belum aktif.\nAktifkan di Pengaturan jika diperlukan.',
-                                    textAlign: TextAlign.center,
-                                    style:
-                                        TextStyle(color: C.muted, height: 1.4),
-                                  ),
-                                ),
-                              ),
-                      ),
                   ],
                 ),
               ), // ContentWidth
@@ -364,161 +303,22 @@ class _ProdukPageState extends State<ProdukPage>
           : Padding(
               padding: const EdgeInsets.only(bottom: 80),
               child: FloatingActionButton.extended(
-                onPressed: () {
-                  if (_tab.index == 0) {
-                    _form(context);
-                  } else {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => const BahanForm(),
-                    );
-                  }
-                },
+                onPressed: () => _form(context),
                 backgroundColor: C.brand,
                 elevation: 4,
                 icon: const Icon(Icons.add_rounded),
-                label: Text(
-                  _tab.index == 0 ? 'Tambah Produk' : 'Tambah Bahan',
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                label: const Text(
+                  'Tambah Produk',
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
             ),
     );
   }
 
-  /// Layout PC: header+tab sama; konten per-tab (Produk 2 kolom, Stok full, Bahan 2 kolom)
+  /// Layout PC: produk body langsung (tanpa nav kiri)
   Widget _buildPcLayout(App a, List<Produk> list) {
-    final showProduk = _tab.index == 0;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildPcLeftNav(a),
-        Container(width: 1, color: C.borderSoft),
-        Expanded(
-          child: showProduk ? _pcProdukBody(a, list) : _pcBahanBody(a),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPcLeftNav(App a) {
-    Widget item({
-      required IconData icon,
-      required String label,
-      required int id,
-      int? badge,
-    }) {
-      final active = _tab.index == id;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-        child: Material(
-          color: active ? C.brandLight : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              if (_tab.index != id) _tab.animateTo(id);
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Row(
-                children: [
-                  Icon(icon, size: 20, color: active ? C.brand : C.faint),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                        color: active ? C.brand : C.text,
-                      ),
-                    ),
-                  ),
-                  if (badge != null && badge > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: active ? C.brand : C.surface,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$badge',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: active ? Colors.white : C.muted,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      width: 240,
-      color: Colors.white,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: C.brandLight,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.inventory_2_rounded,
-                      color: C.brand, size: 20),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'Produk',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-              ],
-            ),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 12, 20, 6),
-            child: Text(
-              'SECTIONS',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: C.muted,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ),
-          item(
-            icon: Icons.inventory_2_rounded,
-            label: 'Produk Jual',
-            id: 0,
-            badge: a.produk.isEmpty ? null : a.produk.length,
-          ),
-          item(
-            icon: Icons.science_outlined,
-            label: 'Bahan HPP',
-            id: 1,
-            badge: a.bahan.isEmpty ? null : a.bahan.length,
-          ),
-          const Spacer(),
-        ],
-      ),
-    );
+    return _pcProdukBody(a, list);
   }
 
   /// Produk Jual: list + form (tanpa tab bar atas)
@@ -733,49 +533,6 @@ class _ProdukPageState extends State<ProdukPage>
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  /// Bahan HPP: list + form
-  Widget _pcBahanBody(App a) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          flex: 6,
-          child: Column(
-            children: [
-              PageHeader(
-                title: 'Bahan HPP',
-                subtitle: a.hppEnabled
-                    ? '${a.bahan.length} bahan baku'
-                    : 'Fitur belum aktif',
-              ),
-              Expanded(
-                child: a.hppEnabled
-                    ? const BahanPage(embeddedPc: true)
-                    : Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            'Fitur Bahan HPP belum aktif.\nAktifkan di Pengaturan jika diperlukan.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: C.muted, height: 1.4),
-                          ),
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-        if (a.hppEnabled) ...[
-          Container(width: 1, color: C.borderSoft),
-          const Expanded(
-            flex: 5,
-            child: BahanPage(embeddedPcFormOnly: true),
-          ),
-        ],
       ],
     );
   }
@@ -1033,10 +790,6 @@ class _ProdukFormState extends State<_ProdukForm> {
   late final TextEditingController _stok;
   String _satuan = 'pcs';
   String? _kategori;
-  bool _gunakanHpp = false;
-
-  /// draft resep: bahanId -> qty
-  final List<_ResepDraft> _resep = [];
 
   /// draft harga paket / grosir
   final List<HargaTier> _tiers = [];
@@ -1060,21 +813,9 @@ class _ProdukFormState extends State<_ProdukForm> {
     _satuan = p?.satuan ?? 'pcs';
     _fotoPath = p?.foto;
     _kategori = p?.kategori;
-    _gunakanHpp = p?.gunakanHpp ?? false;
     if (p?.id != null) {
       final app = context.read<App>();
       _tiers.addAll(app.tiersOf(p!.id!));
-      final items = app.resepOf(p.id!);
-      for (final r in items) {
-        final b = app.bahan.where((e) => e.id == r.bahanId).firstOrNull;
-        final baseSat = b?.satuan ?? 'pcs';
-        final display = UnitConv.bestDisplayUnit(r.qty, baseSat);
-        _resep.add(_ResepDraft(
-          bahanId: r.bahanId,
-          qty: r.qty,
-          displaySatuan: display,
-        ));
-      }
     }
   }
 
@@ -1088,16 +829,6 @@ class _ProdukFormState extends State<_ProdukForm> {
     _urlCtrl.dispose();
     _scanCtrl?.dispose();
     super.dispose();
-  }
-
-  int _hitungHppDraft(App a) {
-    int total = 0;
-    for (final r in _resep) {
-      final b = a.bahan.where((e) => e.id == r.bahanId).firstOrNull;
-      if (b == null) continue;
-      total += (b.hargaPerSatuan * r.qty).round();
-    }
-    return total;
   }
 
   bool get _isDesktop {
@@ -1445,12 +1176,8 @@ class _ProdukFormState extends State<_ProdukForm> {
     final h = int.tryParse(_harga.text) ?? 0;
     final s = double.tryParse(_stok.text) ?? 0.0;
     final a = context.read<App>();
-    final m =
-        _gunakanHpp ? _hitungHppDraft(a) : (int.tryParse(_modal.text) ?? 0);
+    final m = int.tryParse(_modal.text) ?? 0;
     if (n.isEmpty || h <= 0) return;
-    if (_gunakanHpp && _resep.isEmpty) {
-      // tetap boleh, modal = 0
-    }
     await a.saveProduk(
       Produk(
         id: widget.produk?.id,
@@ -1462,18 +1189,7 @@ class _ProdukFormState extends State<_ProdukForm> {
         stok: s,
         foto: _fotoPath,
         kategori: _kategori?.trim().isEmpty == true ? null : _kategori?.trim(),
-        gunakanHpp: _gunakanHpp,
       ),
-      resep: _gunakanHpp
-          ? _resep
-              .where((r) => r.qty > 0)
-              .map((r) => ResepItem(
-                    produkId: widget.produk?.id ?? 0,
-                    bahanId: r.bahanId,
-                    qty: r.qty,
-                  ))
-              .toList()
-          : [],
       tiers: List<HargaTier>.from(_tiers),
     );
     if (!mounted) return;
@@ -1482,162 +1198,6 @@ class _ProdukFormState extends State<_ProdukForm> {
     } else {
       Navigator.pop(context);
     }
-  }
-
-  void _addResepBaris(App a) {
-    if (a.bahan.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Belum ada bahan. Tambah di tab Bahan HPP dulu.')),
-      );
-      return;
-    }
-    final b = a.bahan.first;
-    final baseSat = b.satuan;
-    // Default tampilan: satuan yang nyaman (gram/ml kalau massa/volume)
-    final display = UnitConv.bestDisplayUnit(1, baseSat);
-    // Default qty tampilan = 1 (dalam satuan display), konversi ke base
-    final qtyBase = UnitConv.convert(1, display, baseSat);
-    setState(() {
-      _resep.add(_ResepDraft(
-        bahanId: b.id!,
-        qty: qtyBase,
-        displaySatuan: display,
-      ));
-    });
-  }
-
-  /// Satu baris resep: pilih bahan + jumlah + satuan (konversi otomatis)
-  Widget _buildResepRow(App a, int i, _ResepDraft r) {
-    final bahan = a.bahan.where((b) => b.id == r.bahanId).firstOrNull;
-    final baseSat = bahan?.satuan ?? 'pcs';
-    if (r.displaySatuan.isEmpty) {
-      r.displaySatuan = UnitConv.bestDisplayUnit(r.qty, baseSat);
-    }
-    // Pastikan displaySatuan kompatibel
-    final units = UnitConv.compatibleUnits(baseSat);
-    if (!units.contains(UnitConv.normalize(r.displaySatuan))) {
-      r.displaySatuan = units.first;
-    }
-    final displayQty = r.displayQty(baseSat);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Pilih bahan
-          Expanded(
-            flex: 5,
-            child: DropdownButtonFormField<int>(
-              initialValue:
-                  a.bahan.any((b) => b.id == r.bahanId) ? r.bahanId : null,
-              isDense: true,
-              decoration: InputDecoration(
-                labelText: 'Bahan',
-                filled: true,
-                fillColor: C.surface,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              ),
-              items: a.bahan
-                  .where((b) => b.id != null)
-                  .map((b) => DropdownMenuItem(
-                        value: b.id,
-                        child: Text(
-                          '${b.nama} (${Formatter.rupiah(b.hargaPerSatuan)}/${b.satuan})',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ))
-                  .toList(),
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() {
-                  final newB = a.bahan.where((b) => b.id == v).firstOrNull;
-                  final newBase = newB?.satuan ?? 'pcs';
-                  // Pertahankan jumlah tampilan, konversi ke satuan bahan baru
-                  final currentDisplay = r.displayQty(baseSat);
-                  r.bahanId = v;
-                  r.displaySatuan =
-                      UnitConv.bestDisplayUnit(currentDisplay, newBase);
-                  // Jika kategori berubah, reset ke 1 di satuan baru
-                  if (UnitConv.category(baseSat) !=
-                      UnitConv.category(newBase)) {
-                    r.displaySatuan = UnitConv.compatibleUnits(newBase).first;
-                    r.qty = UnitConv.convert(1, r.displaySatuan, newBase);
-                  } else {
-                    r.setFromDisplay(currentDisplay, newBase);
-                  }
-                });
-              },
-            ),
-          ),
-          const SizedBox(width: 6),
-          // Jumlah (dalam satuan tampilan)
-          Expanded(
-            flex: 2,
-            child: TextFormField(
-              key: ValueKey('qty-$i-${r.bahanId}-${r.displaySatuan}'),
-              initialValue: Formatter.qty(displayQty),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Jumlah',
-                filled: true,
-                fillColor: C.surface,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              ),
-              onChanged: (v) {
-                final input = double.tryParse(v.replaceAll(',', '.')) ?? 0;
-                setState(() => r.setFromDisplay(input, baseSat));
-              },
-            ),
-          ),
-          const SizedBox(width: 6),
-          // Satuan tampilan (konversi otomatis)
-          SizedBox(
-            width: 88,
-            child: DropdownButtonFormField<String>(
-              initialValue: UnitConv.normalize(r.displaySatuan),
-              isDense: true,
-              decoration: InputDecoration(
-                labelText: 'Satuan',
-                filled: true,
-                fillColor: C.surface,
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              ),
-              items: units
-                  .map((u) => DropdownMenuItem(
-                        value: u,
-                        child: Text(u, style: const TextStyle(fontSize: 12)),
-                      ))
-                  .toList(),
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() {
-                  // Saat ganti satuan tampilan, pertahankan nilai "fisik"
-                  // (qty base tetap, hanya displaySatuan berubah)
-                  r.displaySatuan = v;
-                });
-              },
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, size: 18, color: C.danger),
-            onPressed: () => setState(() => _resep.removeAt(i)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -1859,119 +1419,21 @@ class _ProdukFormState extends State<_ProdukForm> {
                           ),
                         ],
                         const SizedBox(height: 14),
-                        // Switch HPP - hanya jika fitur HPP diaktifkan di Pengaturan
-                        if (context.watch<App>().hppEnabled) ...[
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _gunakanHpp ? C.brandLight : C.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: _gunakanHpp
-                                      ? C.brand.withValues(alpha: 0.3)
-                                      : C.borderSoft),
-                            ),
-                            child: SwitchListTile(
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                              title: const Text('Gunakan HPP (Resep)',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13)),
-                              subtitle: Text(
-                                _gunakanHpp
-                                    ? 'Harga modal dihitung dari bahan baku'
-                                    : 'Harga modal diisi manual',
-                                style: const TextStyle(
-                                    fontSize: 11, color: C.muted),
-                              ),
-                              value: _gunakanHpp,
-                              activeThumbColor: C.brand,
-                              onChanged: (v) => setState(() => _gunakanHpp = v),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                        ],
-                        // Pricing Section
-                        if (context.watch<App>().hppEnabled && _gunakanHpp) ...[
-                          Builder(builder: (context) {
-                            final a = context.watch<App>();
-                            final hpp = _hitungHppDraft(a);
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Text('Resep bahan',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 13)),
-                                    const Spacer(),
-                                    TextButton.icon(
-                                      onPressed: () => _addResepBaris(a),
-                                      icon: const Icon(Icons.add, size: 16),
-                                      label: const Text('Bahan',
-                                          style: TextStyle(fontSize: 12)),
-                                    ),
-                                  ],
-                                ),
-                                if (_resep.isEmpty)
-                                  const Padding(
-                                    padding: EdgeInsets.only(bottom: 8),
-                                    child: Text(
-                                      'Belum ada bahan. Tap + Bahan untuk menambah.',
-                                      style: TextStyle(
-                                          fontSize: 12, color: C.muted),
-                                    ),
-                                  ),
-                                ..._resep.asMap().entries.map(
-                                    (e) => _buildResepRow(a, e.key, e.value)),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  decoration: BoxDecoration(
-                                    color: C.brandLight,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Text('HPP / Harga Modal',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12)),
-                                      const Spacer(),
-                                      Text(Formatter.rupiah(hpp),
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 15,
-                                              color: C.brand)),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            );
-                          }),
-                        ] else ...[
-                          Row(
-                            children: [
-                              Expanded(
-                                  child: _field(_modal,
-                                      label: 'Harga Modal',
-                                      hint: '0',
-                                      numeric: true)),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                  child: _field(_harga,
-                                      label: 'Harga Jual',
-                                      hint: '0',
-                                      numeric: true)),
-                            ],
-                          ),
-                        ],
-                        if (context.watch<App>().hppEnabled && _gunakanHpp)
-                          _field(_harga,
-                              label: 'Harga Jual', hint: '0', numeric: true),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: _field(_modal,
+                                    label: 'Harga Modal',
+                                    hint: '0',
+                                    numeric: true)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: _field(_harga,
+                                    label: 'Harga Jual',
+                                    hint: '0',
+                                    numeric: true)),
+                          ],
+                        ),
 
                         _buildTierSection(),
 
@@ -2121,111 +1583,17 @@ class _ProdukFormState extends State<_ProdukForm> {
           const SizedBox(height: 12),
           _field(_barcode, label: 'Barcode', hint: 'Opsional'),
           const SizedBox(height: 12),
-          if (context.watch<App>().hppEnabled) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: _gunakanHpp ? C.brandLight : C.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: _gunakanHpp
-                        ? C.brand.withValues(alpha: 0.3)
-                        : C.borderSoft),
-              ),
-              child: SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('Gunakan HPP (Resep)',
-                    style:
-                        TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                subtitle: Text(
-                  _gunakanHpp
-                      ? 'Harga modal dihitung dari bahan baku'
-                      : 'Harga modal diisi manual',
-                  style: const TextStyle(fontSize: 11, color: C.muted),
-                ),
-                value: _gunakanHpp,
-                activeThumbColor: C.brand,
-                onChanged: (v) => setState(() => _gunakanHpp = v),
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          // Resep editor (PC mode)
-          if (context.watch<App>().hppEnabled && _gunakanHpp) ...[
-            Builder(builder: (context) {
-              final a = context.watch<App>();
-              final hpp = _hitungHppDraft(a);
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Text('Resep bahan',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 13)),
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: () => _addResepBaris(a),
-                        icon: const Icon(Icons.add, size: 16),
-                        label:
-                            const Text('Bahan', style: TextStyle(fontSize: 12)),
-                      ),
-                    ],
-                  ),
-                  if (_resep.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        'Belum ada bahan. Tap + Bahan untuk menambah.',
-                        style: TextStyle(fontSize: 12, color: C.muted),
-                      ),
-                    ),
-                  ..._resep
-                      .asMap()
-                      .entries
-                      .map((e) => _buildResepRow(a, e.key, e.value)),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                      color: C.brandLight,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Text('HPP / Harga Modal',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600, fontSize: 12)),
-                        const Spacer(),
-                        Text(Formatter.rupiah(hpp),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 15,
-                                color: C.brand)),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            }),
-            const SizedBox(height: 10),
-          ],
-          if (context.watch<App>().hppEnabled && _gunakanHpp) ...[
-            _field(_harga, label: 'Harga Jual', hint: '0', numeric: true),
-          ] else ...[
-            Row(
-              children: [
-                Expanded(
-                    child: _field(_modal,
-                        label: 'Harga Modal', hint: '0', numeric: true)),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: _field(_harga,
-                        label: 'Harga Jual', hint: '0', numeric: true)),
-              ],
-            ),
-          ],
+          Row(
+            children: [
+              Expanded(
+                  child: _field(_modal,
+                      label: 'Harga Modal', hint: '0', numeric: true)),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: _field(_harga,
+                      label: 'Harga Jual', hint: '0', numeric: true)),
+            ],
+          ),
           _buildTierSection(),
           const SizedBox(height: 12),
           Row(
@@ -2644,29 +2012,4 @@ class _ProdukFormState extends State<_ProdukForm> {
       );
 }
 
-/// Draft baris resep.
-/// [qty] selalu dalam satuan dasar bahan (yang disimpan ke DB).
-/// [displaySatuan] + nilai yang ditampilkan di UI bisa beda (konversi otomatis).
-class _ResepDraft {
-  int bahanId;
-  double qty; // satuan dasar bahan
-  String displaySatuan;
 
-  _ResepDraft({
-    required this.bahanId,
-    required this.qty,
-    this.displaySatuan = '',
-  });
-
-  /// Qty yang ditampilkan ke user (sudah dikonversi ke [displaySatuan])
-  double displayQty(String bahanSatuan) {
-    final ds = displaySatuan.isEmpty ? bahanSatuan : displaySatuan;
-    return UnitConv.convert(qty, bahanSatuan, ds);
-  }
-
-  /// Set qty dari input user (dalam [displaySatuan]), simpan sebagai satuan bahan
-  void setFromDisplay(double inputQty, String bahanSatuan) {
-    final ds = displaySatuan.isEmpty ? bahanSatuan : displaySatuan;
-    qty = UnitConv.convert(inputQty, ds, bahanSatuan);
-  }
-}

@@ -12,7 +12,7 @@ class Db {
     final path = join(await getDatabasesPath(), 'warung_db.db');
     _db = await openDatabase(
       path,
-      version: 10,
+      version: 12,
       onCreate: (d, v) async {
         await d.execute('''
           CREATE TABLE produk(
@@ -24,8 +24,7 @@ class Db {
             harga INTEGER NOT NULL,
             stok REAL NOT NULL,
             foto TEXT,
-            kategori TEXT,
-            gunakanHpp INTEGER NOT NULL DEFAULT 0
+            kategori TEXT
           )''');
         await d.execute('''
           CREATE TABLE transaksi(
@@ -49,31 +48,6 @@ class Db {
             hargaSatuan INTEGER NOT NULL,
             jumlah REAL NOT NULL,
             subtotal INTEGER NOT NULL
-          )''');
-        await d.execute('''
-          CREATE TABLE bahan(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nama TEXT NOT NULL,
-            satuan TEXT NOT NULL DEFAULT 'g',
-            hargaBeli INTEGER NOT NULL DEFAULT 0,
-            jumlahBeli REAL NOT NULL DEFAULT 1,
-            stok REAL NOT NULL DEFAULT 0
-          )''');
-        await d.execute('''
-          CREATE TABLE resep_item(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            produkId INTEGER NOT NULL,
-            bahanId INTEGER NOT NULL,
-            qty REAL NOT NULL
-          )''');
-        await d.execute('''
-          CREATE TABLE staff(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nama TEXT NOT NULL,
-            pin TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'Kasir',
-            aktif INTEGER NOT NULL DEFAULT 1,
-            permissions TEXT NOT NULL DEFAULT ''
           )''');
         await d.execute('''
           CREATE TABLE produk_tier(
@@ -131,39 +105,6 @@ class Db {
                 "ALTER TABLE transaksi ADD COLUMN namaHutang TEXT NOT NULL DEFAULT ''");
           } catch (_) {}
         }
-        if (oldV < 6) {
-          try {
-            await d.execute(
-                "ALTER TABLE produk ADD COLUMN gunakanHpp INTEGER NOT NULL DEFAULT 0");
-          } catch (_) {}
-          await d.execute('''
-            CREATE TABLE IF NOT EXISTS bahan(
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              nama TEXT NOT NULL,
-              satuan TEXT NOT NULL DEFAULT 'g',
-              hargaBeli INTEGER NOT NULL DEFAULT 0,
-              jumlahBeli REAL NOT NULL DEFAULT 1,
-              stok REAL NOT NULL DEFAULT 0
-            )''');
-          await d.execute('''
-            CREATE TABLE IF NOT EXISTS resep_item(
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              produkId INTEGER NOT NULL,
-              bahanId INTEGER NOT NULL,
-              qty REAL NOT NULL
-            )''');
-        }
-        if (oldV < 7) {
-          await d.execute('''
-            CREATE TABLE IF NOT EXISTS staff(
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              nama TEXT NOT NULL,
-              pin TEXT NOT NULL,
-              role TEXT NOT NULL DEFAULT 'Kasir',
-              aktif INTEGER NOT NULL DEFAULT 1,
-              permissions TEXT NOT NULL DEFAULT ''
-            )''');
-        }
         if (oldV < 8) {
           await d.execute('''
             CREATE TABLE IF NOT EXISTS produk_tier(
@@ -198,6 +139,16 @@ class Db {
           try {
             await d.execute("ALTER TABLE produk ADD COLUMN kategori TEXT");
           } catch (_) {}
+        }
+        if (oldV < 11) {
+          await d.execute('DROP TABLE IF EXISTS resep_item');
+          await d.execute('DROP TABLE IF EXISTS bahan');
+          try {
+            await d.execute('ALTER TABLE produk DROP COLUMN gunakanHpp');
+          } catch (_) {}
+        }
+        if (oldV < 12) {
+          await d.execute('DROP TABLE IF EXISTS staff');
         }
       },
     );
@@ -319,50 +270,6 @@ class Db {
     return id;
   }
 
-  // ── Bahan baku ──────────────────────────────────────────────
-  Future<List<Bahan>> allBahan() async {
-    final rows = await (await db).query('bahan', orderBy: 'nama ASC');
-    return rows.map(Bahan.fromMap).toList();
-  }
-
-  Future<int> insertBahan(Bahan b) async =>
-      (await db).insert('bahan', b.toMap());
-
-  Future<int> updateBahan(Bahan b) async =>
-      (await db).update('bahan', b.toMap(), where: 'id=?', whereArgs: [b.id]);
-
-  Future<int> deleteBahan(int id) async {
-    final d = await db;
-    await d.delete('resep_item', where: 'bahanId=?', whereArgs: [id]);
-    return d.delete('bahan', where: 'id=?', whereArgs: [id]);
-  }
-
-  // ── Resep ───────────────────────────────────────────────────
-  Future<List<ResepItem>> resepOf(int produkId) async {
-    final rows = await (await db)
-        .query('resep_item', where: 'produkId=?', whereArgs: [produkId]);
-    return rows.map(ResepItem.fromMap).toList();
-  }
-
-  Future<List<ResepItem>> allResep() async {
-    final rows = await (await db).query('resep_item');
-    return rows.map(ResepItem.fromMap).toList();
-  }
-
-  /// Ganti seluruh resep produk (hapus lama + insert baru)
-  Future<void> setResep(int produkId, List<ResepItem> items) async {
-    final d = await db;
-    await d.transaction((txn) async {
-      await txn
-          .delete('resep_item', where: 'produkId=?', whereArgs: [produkId]);
-      for (final it in items) {
-        await txn.insert('resep_item', it.toMap()..['produkId'] = produkId);
-      }
-    });
-  }
-
-  Future<void> deleteResepOf(int produkId) async => (await db)
-      .delete('resep_item', where: 'produkId=?', whereArgs: [produkId]);
 
   Future<List<Transaksi>> allTransaksi() async {
     final rows = await (await db).query('transaksi', orderBy: 'tanggal DESC');
@@ -437,24 +344,6 @@ class Db {
         );
       }
       await batch.commit(noResult: true);
-
-      // Potong stok bahan baku sesuai resep HPP
-      for (final it in items) {
-        final resep = await txn.query(
-          'resep_item',
-          where: 'produkId=?',
-          whereArgs: [it.produkId],
-        );
-        for (final r in resep) {
-          final bahanId = r['bahanId'] as int;
-          final qtyResep = (r['qty'] as num).toDouble();
-          final potong = qtyResep * it.jumlah;
-          await txn.rawUpdate(
-            'UPDATE bahan SET stok = stok - ? WHERE id = ?',
-            [potong, bahanId],
-          );
-        }
-      }
     });
     return trxId;
   }
@@ -469,7 +358,7 @@ class Db {
         where: 'id=?',
         whereArgs: [trxId],
       );
-      // Restore stok produk + bahan
+      // Restore stok produk
       final items = await txn.query(
         'transaksi_item',
         where: 'transaksiId=?',
@@ -482,20 +371,6 @@ class Db {
           'UPDATE produk SET stok=stok+? WHERE id=?',
           [jumlah, produkId],
         );
-        // Kembalikan stok bahan dari resep
-        final resep = await txn.query(
-          'resep_item',
-          where: 'produkId=?',
-          whereArgs: [produkId],
-        );
-        for (final r in resep) {
-          final bahanId = r['bahanId'] as int;
-          final qtyResep = (r['qty'] as num).toDouble();
-          await txn.rawUpdate(
-            'UPDATE bahan SET stok=stok+? WHERE id=?',
-            [qtyResep * jumlah, bahanId],
-          );
-        }
       }
     });
   }
@@ -509,36 +384,11 @@ class Db {
     await d.update('transaksi', data, where: 'id=?', whereArgs: [trxId]);
   }
 
-  // ── Staff ──────────────────────────────────────────────────
-  Future<List<Staff>> allStaff() async {
-    final rows = await (await db).query('staff', orderBy: 'role ASC, nama ASC');
-    return rows.map(Staff.fromMap).toList();
-  }
-
-  Future<int> insertStaff(Staff s) async =>
-      (await db).insert('staff', s.toMap());
-
-  Future<int> updateStaff(Staff s) async =>
-      (await db).update('staff', s.toMap(), where: 'id=?', whereArgs: [s.id]);
-
-  Future<int> deleteStaff(int id) async =>
-      (await db).delete('staff', where: 'id=?', whereArgs: [id]);
-
-  Future<Staff?> staffById(int id) async {
-    final rows = await (await db)
-        .query('staff', where: 'id=?', whereArgs: [id], limit: 1);
-    if (rows.isEmpty) return null;
-    return Staff.fromMap(rows.first);
-  }
-
   Future<void> clearAll() async {
     final d = await db;
     await d.delete('transaksi_item');
     await d.delete('transaksi');
-    await d.delete('resep_item');
-    await d.delete('bahan');
     await d.delete('produk');
-    // staff tidak dihapus saat clear data toko
   }
 
   Future<void> restoreBackup({
@@ -571,5 +421,73 @@ class Db {
         await txn.insert('produk', p.toMap());
       }
     });
+  }
+
+  /// Restore backup besar dalam satu transaksi database.
+  /// ID lama dipetakan ke ID baru supaya relasi item tetap benar walaupun
+  /// ID dari file berbeda dengan ID yang diberikan SQLite.
+  Future<Map<String, int>> restoreFromBackup({
+    required List<Produk> produks,
+    required List<Transaksi> transaksis,
+    required Map<int, List<TransaksiItem>> itemsByTrx,
+    Map<int, int> existingProdukIds = const {},
+  }) async {
+    final d = await db;
+    // existingProdukIds: ID produk di file -> ID produk yang sudah ada di DB.
+    final produkMap = <int, int>{...existingProdukIds};
+    final trxMap = <int, int>{};
+    var addedItems = 0;
+
+    await d.transaction((txn) async {
+      for (final p in produks) {
+        final oldId = p.id;
+        final row = Map<String, dynamic>.from(p.toMap())..remove('id');
+        final newId = await txn.insert('produk', row);
+        if (oldId != null) produkMap[oldId] = newId;
+      }
+
+      for (final t in transaksis) {
+        final oldId = t.id;
+        final newId = await txn.insert(
+          'transaksi',
+          Transaksi(
+            tanggal: t.tanggal,
+            totalBelanja: t.totalBelanja,
+            totalBayar: t.totalBayar,
+            kembalian: t.kembalian,
+            noUrut: t.noUrut,
+            metode: t.metode,
+            status: t.status,
+            namaHutang: t.namaHutang,
+          ).toMap(),
+        );
+        if (oldId != null) trxMap[oldId] = newId;
+
+        final items = oldId == null
+            ? const <TransaksiItem>[]
+            : (itemsByTrx[oldId] ?? const <TransaksiItem>[]);
+        for (final it in items) {
+          await txn.insert(
+            'transaksi_item',
+            TransaksiItem(
+              transaksiId: newId,
+              produkId: produkMap[it.produkId] ?? 0,
+              namaProduk: it.namaProduk,
+              hargaModal: it.hargaModal,
+              hargaSatuan: it.hargaSatuan,
+              jumlah: it.jumlah,
+              subtotal: it.subtotal,
+            ).toMap(),
+          );
+          addedItems++;
+        }
+      }
+    });
+
+    return {
+      'produk': produks.length,
+      'transaksi': transaksis.length,
+      'items': addedItems,
+    };
   }
 }

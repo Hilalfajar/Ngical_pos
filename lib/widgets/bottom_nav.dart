@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app.dart';
 import '../theme.dart';
-import 'staff_session.dart';
 
 /// Navigasi utama:
 /// - HP: bottom bar (dengan pill Menu di POS)
@@ -41,7 +40,6 @@ class BottomNav extends StatelessWidget {
       'SettingsMenu',
       'Settings',
       'Printer',
-      'Staff',
       'Backup',
       'About',
     };
@@ -57,8 +55,6 @@ class BottomNav extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const StaffMobileChip(),
-              const SizedBox(height: 6),
               // Tombol ^ di atas nav bar saat di POS
               if (isPos) ...[
                 Center(
@@ -80,48 +76,43 @@ class BottomNav extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    if (a.canAccessMenu('POS'))
-                      _NavItem(
-                        icon: Icons.point_of_sale_rounded,
-                        label: 'Kasir',
-                        active: a.tab == 'POS',
-                        onTap: () {
-                          if (!isPos) {
-                            a.setTab('POS');
-                          }
-                          // Jika sudah di POS, tidak lakukan apa-apa
-                        },
-                      ),
-                    if (a.canAccessMenu('Produk'))
-                      _NavItem(
-                        icon: Icons.inventory_2_rounded,
-                        label: 'Produk',
-                        active: a.tab == 'Produk',
-                        onTap: () => a.setTab('Produk'),
-                      ),
-                    if (a.canAccessMenu('UpdateStok'))
-                      _NavItem(
-                        icon: Icons.add_box_outlined,
-                        label: 'Stok',
-                        active: a.tab == 'UpdateStok',
-                        onTap: () => a.setTab('UpdateStok'),
-                      ),
-                    if (a.canAccessMenu('Transaksi'))
-                      _NavItem(
-                        icon: Icons.bar_chart_rounded,
-                        label: 'Laporan',
-                        active: a.tab == 'Transaksi',
-                        onTap: () => a.setTab('Transaksi'),
-                      ),
-                    if (a.canAccessMenu('SettingsMenu'))
-                      _NavItem(
-                        icon: Icons.settings_rounded,
-                        label: 'Pengaturan',
-                        active: isSettingsActive,
-                        onTap: () {
-                          a.setTab('SettingsMenu');
-                        },
-                      ),
+                    _NavItem(
+                      icon: Icons.point_of_sale_rounded,
+                      label: 'Kasir',
+                      active: a.tab == 'POS',
+                      onTap: () {
+                        if (!isPos) {
+                          a.setTab('POS');
+                        }
+                        // Jika sudah di POS, tidak lakukan apa-apa
+                      },
+                    ),
+                    _NavItem(
+                      icon: Icons.inventory_2_rounded,
+                      label: 'Produk',
+                      active: a.tab == 'Produk',
+                      onTap: () => a.setTab('Produk'),
+                    ),
+                    _NavItem(
+                      icon: Icons.add_box_outlined,
+                      label: 'Stok',
+                      active: a.tab == 'UpdateStok',
+                      onTap: () => a.setTab('UpdateStok'),
+                    ),
+                    _NavItem(
+                      icon: Icons.bar_chart_rounded,
+                      label: 'Laporan',
+                      active: a.tab == 'Transaksi',
+                      onTap: () => a.setTab('Transaksi'),
+                    ),
+                    _NavItem(
+                      icon: Icons.settings_rounded,
+                      label: 'Pengaturan',
+                      active: isSettingsActive,
+                      onTap: () {
+                        a.setTab('SettingsMenu');
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -182,7 +173,6 @@ class SideRail extends StatelessWidget {
       'SettingsMenu',
       'Settings',
       'Printer',
-      'Staff',
       'Backup',
       'About',
     };
@@ -274,49 +264,42 @@ class SideRail extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (a.canAccessMenu('POS'))
-            _RailItem(
-              icon: Icons.point_of_sale_rounded,
-              label: 'Kasir',
-              active: a.tab == 'POS',
-              expanded: expanded,
-              onTap: () => a.setTab('POS'),
-            ),
-          if (a.canAccessMenu('Produk'))
-            _RailItem(
-              icon: Icons.inventory_2_rounded,
-              label: 'Produk',
-              active: a.tab == 'Produk',
-              expanded: expanded,
-              onTap: () => a.setTab('Produk'),
-            ),
-          if (a.canAccessMenu('UpdateStok'))
-            _RailItem(
-              icon: Icons.add_box_outlined,
-              label: 'Stok',
-              active: a.tab == 'UpdateStok',
-              expanded: expanded,
-              onTap: () => a.setTab('UpdateStok'),
-            ),
-          if (a.canAccessMenu('Transaksi'))
-            _RailItem(
-              icon: Icons.bar_chart_rounded,
-              label: 'Laporan',
-              active: a.tab == 'Transaksi',
-              expanded: expanded,
-              onTap: () => a.setTab('Transaksi'),
-            ),
+          _RailItem(
+            icon: Icons.point_of_sale_rounded,
+            label: 'Kasir',
+            active: a.tab == 'POS',
+            expanded: expanded,
+            onTap: () => a.setTab('POS'),
+          ),
+          _RailItem(
+            icon: Icons.inventory_2_rounded,
+            label: 'Produk',
+            active: a.tab == 'Produk',
+            expanded: expanded,
+            onTap: () => a.setTab('Produk'),
+          ),
+          _RailItem(
+            icon: Icons.add_box_outlined,
+            label: 'Stok',
+            active: a.tab == 'UpdateStok',
+            expanded: expanded,
+            onTap: () => a.setTab('UpdateStok'),
+          ),
+          _RailItem(
+            icon: Icons.bar_chart_rounded,
+            label: 'Laporan',
+            active: a.tab == 'Transaksi',
+            expanded: expanded,
+            onTap: () => a.setTab('Transaksi'),
+          ),
           const Spacer(),
-          // Login / ganti user / logout - selalu di atas gear
-          StaffRailButton(expanded: expanded),
-          if (a.canAccessMenu('SettingsMenu'))
-            _RailItem(
-              icon: Icons.settings_rounded,
-              label: 'Pengaturan',
-              active: isSettingsActive,
-              expanded: expanded,
-              onTap: () => a.setTab('SettingsMenu'),
-            ),
+          _RailItem(
+            icon: Icons.settings_rounded,
+            label: 'Pengaturan',
+            active: isSettingsActive,
+            expanded: expanded,
+            onTap: () => a.setTab('SettingsMenu'),
+          ),
           const SizedBox(height: 12),
         ],
       ),

@@ -12,7 +12,6 @@ import '../providers/app.dart';
 import '../theme.dart';
 import '../utils/toast.dart';
 import 'printer.dart';
-import 'staff.dart';
 
 //  About
 
@@ -763,8 +762,12 @@ class _BackupPageState extends State<BackupPage> {
         final text = utf8.decode(bytes);
         final decoded = jsonDecode(text);
         Map<String, int> result;
-        if (decoded is Map && decoded.containsKey('produks')) {
-          result = await a.restoreFromJson(Map<String, dynamic>.from(decoded));
+        if (decoded is Map) {
+          final m = Map<String, dynamic>.from(decoded);
+          if (!_looksLikeBackup(m)) {
+            throw Exception('Format file tidak dikenali');
+          }
+          result = await a.restoreFromJson(m);
         } else if (decoded is List) {
           final added = await a.restoreProdukOnly(decoded);
           result = {'produk': added, 'transaksi': 0, 'items': 0};
@@ -978,6 +981,12 @@ class _BackupPageState extends State<BackupPage> {
     return result;
   }
 
+  /// Backup versi offline menyimpan daftar di key 'produks'/'transaksis',
+  /// versi online di 'produk'/'transaksi'.
+  bool _looksLikeBackup(Map<String, dynamic> m) =>
+      const ['produks', 'produk', 'transaksis', 'transaksi']
+          .any((k) => m[k] is List);
+
   Future<void> _restoreZip(App a, Uint8List zipBytes) async {
     final archive = ZipDecoder().decodeBytes(zipBytes);
 
@@ -987,8 +996,11 @@ class _BackupPageState extends State<BackupPage> {
     final jsonStr = utf8.decode(dataFile.content as List<int>);
     final decoded = jsonDecode(jsonStr) as Map<String, dynamic>;
 
-    final tmpDir = await getTemporaryDirectory();
-    final fotoDir = Directory('${tmpDir.path}/restored_foto');
+    // Foto masuk ke folder yang sama dengan foto yang disimpan manual
+    // (produk.dart). Jangan ke %TEMP%: Windows bisa membersihkannya kapan
+    // saja dan gambar di database hilang tanpa pesan error.
+    final docsDir = await getApplicationDocumentsDirectory();
+    final fotoDir = Directory('${docsDir.path}/product_images');
     await fotoDir.create(recursive: true);
 
     final fotoMap = <String, String>{};
@@ -1000,17 +1012,14 @@ class _BackupPageState extends State<BackupPage> {
       }
     }
 
-    if (decoded['produks'] != null) {
-      final produks = decoded['produks'] as List;
-      for (final p in produks) {
-        if (p['foto'] != null) {
-          final fotoFilename =
-              (p['foto'] as String).split('/').last.split('\\').last;
-          final matched = fotoMap.entries
-              .where((e) => e.key.endsWith(fotoFilename))
-              .firstOrNull;
-          if (matched != null) p['foto'] = matched.value;
-        }
+    for (final e in backupRows(decoded, const ['produks', 'produk'])) {
+      if (e is! Map) continue;
+      final foto = e['foto'];
+      if (foto is String && foto.isNotEmpty) {
+        final fotoFilename = foto.split('/').last.split('\\').last;
+        final matched =
+            fotoMap.entries.where((x) => x.key.endsWith(fotoFilename)).firstOrNull;
+        if (matched != null) e['foto'] = matched.value;
       }
     }
 
@@ -1495,14 +1504,12 @@ class SettingsMenuPage extends StatefulWidget {
 
 class _SettingsMenuPageState extends State<SettingsMenuPage> {
   /// PC: section aktif di panel kanan
-  String _pcSection = 'store'; // store | printer | staff | backup | about
+  String _pcSection = 'store'; // store | printer | backup | about
 
   Widget _pcContent() {
     switch (_pcSection) {
       case 'printer':
         return const PrinterPage();
-      case 'staff':
-        return const StaffPage();
       case 'backup':
         return const BackupPage();
       case 'about':
@@ -1551,42 +1558,12 @@ class _SettingsMenuPageState extends State<SettingsMenuPage> {
     );
   }
 
-  String _firstAllowedSection(App a) {
-    if (a.canAccessMenu('settings')) return 'store';
-    if (a.canAccessMenu('printer')) return 'printer';
-    if (a.canAccessMenu('staff')) return 'staff';
-    if (a.canAccessMenu('backup')) return 'backup';
-    return 'about';
-  }
-
-  bool _sectionAllowed(App a, String id) {
-    switch (id) {
-      case 'store':
-      case 'about':
-        return a.canAccessMenu('settings');
-      case 'printer':
-        return a.canAccessMenu('printer');
-      case 'staff':
-        return a.canAccessMenu('staff');
-      case 'backup':
-        return a.canAccessMenu('backup');
-      default:
-        return true;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final a = context.watch<App>();
     final isPc = MediaQuery.sizeOf(context).width >= 1100;
 
     if (isPc) {
-      // Jika section aktif tidak diizinkan, pindah ke yang boleh
-      if (!_sectionAllowed(a, _pcSection)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _pcSection = _firstAllowedSection(a));
-        });
-      }
       return Scaffold(
         backgroundColor: C.bg,
         body: SafeArea(
@@ -1648,77 +1625,41 @@ class _SettingsMenuPageState extends State<SettingsMenuPage> {
                         ],
                       ),
                     ),
-                    // HPP toggle (hanya jika punya akses settings)
-                    if (a.canAccessMenu('settings'))
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-                        child: Material(
-                          color: C.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          child: SwitchListTile(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 10),
-                            dense: true,
-                            title: const Text('Fitur HPP',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w700, fontSize: 12)),
-                            value: a.hppEnabled,
-                            activeThumbColor: C.brand,
-                            onChanged: (v) =>
-                                context.read<App>().setHppEnabled(v),
-                          ),
-                        ),
-                      ),
-                    if (a.canAccessMenu('settings') ||
-                        a.canAccessMenu('printer') ||
-                        a.canAccessMenu('staff') ||
-                        a.canAccessMenu('backup')) ...[
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(14, 8, 14, 4),
-                        child: Text('MANAJEMEN',
-                            style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: C.muted,
-                                letterSpacing: 0.6)),
-                      ),
-                      if (a.canAccessMenu('settings'))
-                        _pcMenuItem(
-                            icon: Icons.storefront_rounded,
-                            title: 'Pengaturan Toko',
-                            id: 'store'),
-                      if (a.canAccessMenu('printer'))
-                        _pcMenuItem(
-                            icon: Icons.print_rounded,
-                            title: 'Printer',
-                            id: 'printer'),
-                      if (a.canAccessMenu('staff'))
-                        _pcMenuItem(
-                            icon: Icons.people_outline_rounded,
-                            title: 'Staff',
-                            id: 'staff'),
-                      if (a.canAccessMenu('backup'))
-                        _pcMenuItem(
-                            icon: Icons.backup_rounded,
-                            title: 'Backup & Restore',
-                            id: 'backup'),
-                    ],
-                    if (a.canAccessMenu('settings')) ...[
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(14, 12, 14, 4),
-                        child: Text('LAINNYA',
-                            style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: C.muted,
-                                letterSpacing: 0.6)),
-                      ),
-                      if (a.canAccessMenu('settings'))
-                        _pcMenuItem(
-                            icon: Icons.info_outline_rounded,
-                            title: 'Tentang',
-                            id: 'about'),
-                    ],
+
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(14, 8, 14, 4),
+                      child: Text('MANAJEMEN',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: C.muted,
+                              letterSpacing: 0.6)),
+                    ),
+                    _pcMenuItem(
+                        icon: Icons.storefront_rounded,
+                        title: 'Pengaturan Toko',
+                        id: 'store'),
+                    _pcMenuItem(
+                        icon: Icons.print_rounded,
+                        title: 'Printer',
+                        id: 'printer'),
+                    _pcMenuItem(
+                        icon: Icons.backup_rounded,
+                        title: 'Backup & Restore',
+                        id: 'backup'),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(14, 12, 14, 4),
+                      child: Text('LAINNYA',
+                          style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: C.muted,
+                              letterSpacing: 0.6)),
+                    ),
+                    _pcMenuItem(
+                        icon: Icons.info_outline_rounded,
+                        title: 'Tentang',
+                        id: 'about'),
                   ],
                 ),
               ),
@@ -1740,7 +1681,7 @@ class _SettingsMenuPageState extends State<SettingsMenuPage> {
             children: [
               const PageHeader(
                 title: 'Pengaturan',
-                subtitle: 'Kelola toko, printer, staff & lainnya',
+                subtitle: 'Kelola toko, printer & lainnya',
               ),
               const SizedBox(height: 20),
               Container(
@@ -1791,90 +1732,33 @@ class _SettingsMenuPageState extends State<SettingsMenuPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              if (a.canAccessMenu('settings'))
-                Material(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: C.borderSoft),
-                    ),
-                    child: SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      secondary: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: C.brandLight,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.science_outlined,
-                            color: C.brand, size: 20),
-                      ),
-                      title: const Text('Fitur HPP / Resep',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w700, fontSize: 14)),
-                      subtitle: Text(
-                        a.hppEnabled
-                            ? 'Aktif - cocok untuk F&B, jus, makanan'
-                            : 'Nonaktif - cocok untuk warung sembako',
-                        style: const TextStyle(fontSize: 11, color: C.muted),
-                      ),
-                      value: a.hppEnabled,
-                      activeThumbColor: C.brand,
-                      onChanged: (v) => context.read<App>().setHppEnabled(v),
-                    ),
-                  ),
-                ),
-              if (a.canAccessMenu('settings') ||
-                  a.canAccessMenu('printer') ||
-                  a.canAccessMenu('staff') ||
-                  a.canAccessMenu('backup')) ...[
-                const SectionLabel('Manajemen'),
-                if (a.canAccessMenu('settings'))
-                  _SettingsTile(
-                    icon: Icons.storefront_rounded,
-                    title: 'Pengaturan Toko',
-                    subtitle: 'Nama, alamat, kontak & pembayaran',
-                    onTap: () => context.read<App>().setTab('Settings'),
-                  ),
-                if (a.canAccessMenu('printer'))
-                  _SettingsTile(
-                    icon: Icons.print_rounded,
-                    title: 'Printer',
-                    subtitle: 'Pengaturan printer Bluetooth',
-                    onTap: () => context.read<App>().setTab('Printer'),
-                  ),
-                if (a.canAccessMenu('staff'))
-                  _SettingsTile(
-                    icon: Icons.people_outline_rounded,
-                    title: 'Staff',
-                    subtitle: 'Kelola karyawan',
-                    onTap: () => context.read<App>().setTab('Staff'),
-                  ),
-                if (a.canAccessMenu('backup'))
-                  _SettingsTile(
-                    icon: Icons.backup_rounded,
-                    title: 'Backup & Restore',
-                    subtitle: 'Cadangan data',
-                    onTap: () => context.read<App>().setTab('Backup'),
-                  ),
-              ],
-              if (a.canAccessMenu('settings')) ...[
-                const SizedBox(height: 16),
-                const SectionLabel('Lainnya'),
-                if (a.canAccessMenu('settings'))
-                  _SettingsTile(
-                    icon: Icons.info_outline_rounded,
-                    title: 'Tentang',
-                    subtitle: 'Info aplikasi',
-                    onTap: () => context.read<App>().setTab('About'),
-                  ),
-              ],
+              const SectionLabel('Manajemen'),
+              _SettingsTile(
+                icon: Icons.storefront_rounded,
+                title: 'Pengaturan Toko',
+                subtitle: 'Nama, alamat, kontak & pembayaran',
+                onTap: () => context.read<App>().setTab('Settings'),
+              ),
+              _SettingsTile(
+                icon: Icons.print_rounded,
+                title: 'Printer',
+                subtitle: 'Pengaturan printer Bluetooth',
+                onTap: () => context.read<App>().setTab('Printer'),
+              ),
+              _SettingsTile(
+                icon: Icons.backup_rounded,
+                title: 'Backup & Restore',
+                subtitle: 'Cadangan data',
+                onTap: () => context.read<App>().setTab('Backup'),
+              ),
+              const SizedBox(height: 16),
+              const SectionLabel('Lainnya'),
+              _SettingsTile(
+                icon: Icons.info_outline_rounded,
+                title: 'Tentang',
+                subtitle: 'Info aplikasi',
+                onTap: () => context.read<App>().setTab('About'),
+              ),
             ],
           ),
         ),
