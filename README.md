@@ -21,7 +21,7 @@
 
 **Ngical POS** adalah aplikasi Point of Sale (POS) / kasir yang dirancang untuk usaha kecil dan menengah seperti warung, toko sembako, kafe kecil, dan sejenisnya. Semua data tersimpan secara lokal di perangkat — tidak memerlukan server atau koneksi internet untuk beroperasi.
 
-Versi: **1.1.33**
+Versi: **1.1.36**
 
 ---
 

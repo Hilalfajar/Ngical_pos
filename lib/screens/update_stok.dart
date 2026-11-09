@@ -303,13 +303,25 @@ class _UpdateStokPageState extends State<UpdateStokPage> {
     if (_showOnlyPending) {
       filtered = filtered.where((p) => pending.containsKey(p.id)).toList();
     }
-    if (_query.isEmpty) return filtered;
-    final s = _query.toLowerCase();
-    return filtered
-        .where((p) =>
-            p.nama.toLowerCase().contains(s) ||
-            (p.barcode?.toLowerCase().contains(s) ?? false))
-        .toList();
+    if (_query.isNotEmpty) {
+      final s = _query.toLowerCase();
+      filtered = filtered
+          .where((p) =>
+              p.nama.toLowerCase().contains(s) ||
+              (p.barcode?.toLowerCase().contains(s) ?? false))
+          .toList();
+    }
+    // Habis (0) paling atas, lalu menipis (<=5), lalu stok terkecil.
+    final out = List<Produk>.of(filtered);
+    out.sort((a, b) {
+      final ra = a.stok <= 0 ? 0 : (a.stok <= 5 ? 1 : 2);
+      final rb = b.stok <= 0 ? 0 : (b.stok <= 5 ? 1 : 2);
+      if (ra != rb) return ra.compareTo(rb);
+      final c = a.stok.compareTo(b.stok);
+      if (c != 0) return c;
+      return a.nama.toLowerCase().compareTo(b.nama.toLowerCase());
+    });
+    return out;
   }
 
   void _startScan() {
@@ -775,6 +787,9 @@ class _UpdateStokPageState extends State<UpdateStokPage> {
         final p = list[i];
         final addQty = p.id != null ? (a.pendingStok[p.id!] ?? 0) : 0.0;
         final hasPending = addQty > 0;
+        final stokColor = p.stok <= 0
+            ? C.danger
+            : (p.stok <= 5 ? const Color(0xFFCA8A04) : C.muted);
 
         return Material(
           color: hasPending ? C.brandLight : Colors.white,
@@ -811,8 +826,12 @@ class _UpdateStokPageState extends State<UpdateStokPage> {
                           hasPending
                               ? 'Stok ${Formatter.qty(p.stok)} → ${Formatter.qty(p.stok + addQty)}'
                               : 'Stok ${Formatter.qty(p.stok)} ${p.satuan} · ${p.barcode ?? "-"}',
-                          style:
-                              const TextStyle(fontSize: 10.5, color: C.muted),
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: stokColor,
+                            fontWeight:
+                                p.stok <= 5 ? FontWeight.w700 : FontWeight.w400,
+                          ),
                         ),
                       ],
                     ),
