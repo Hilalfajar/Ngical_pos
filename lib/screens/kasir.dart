@@ -81,19 +81,6 @@ class _KasirPageState extends State<KasirPage> {
         .toList();
   }
 
-  /// Setelah pilih produk: fokus ke search + select-all teks,
-  /// supaya ketik nama berikutnya langsung mengganti (seperti Word/Excel).
-  void _selectAllSearch() {
-    if (!_focusNode.canRequestFocus) return;
-    _focusNode.requestFocus();
-    final t = _q.text;
-    if (t.isEmpty) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _q.selection = TextSelection(baseOffset: 0, extentOffset: _q.text.length);
-    });
-  }
-
   void _openSheet(BuildContext ctx) {
     // Unfocus / tutup keyboard sebelum buka sheet
     _focusNode.unfocus();
@@ -509,7 +496,6 @@ class _KasirPageState extends State<KasirPage> {
                         qty: qty,
                         onTap: () {
                           a.addCart(p);
-                          _selectAllSearch();
                         });
                   },
                 ),
